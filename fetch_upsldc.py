@@ -7,7 +7,9 @@ machine required.
 
 import os
 import csv
+import time
 from datetime import datetime
+from urllib.parse import quote
 
 import requests
 
@@ -22,6 +24,15 @@ HEADERS = {
         "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
     )
 }
+
+# GitHub Actions runner IPs are blocked by upsldc.org (confirmed by testing),
+# same as some cloud providers. Route through public proxy services instead --
+# they fetch upsldc.org from their own IPs and hand the content back to us.
+# Tried in order; if one is down/rate-limited, the next is tried.
+PROXY_URL_TEMPLATES = [
+    "https://api.codetabs.com/v1/proxy?quest={target}",
+    "https://api.allorigins.win/raw?url={target}",
+]
 
 PLANT_SEQUENCE = ["MEJA", "LANCO", "BARA", "TANDA", "LALITPUR", "Harduaganj Ex2", "ROSA 1", "ROSA 2"]
 
@@ -42,9 +53,34 @@ def clean(s):
 
 
 def fetch_json(url):
-    resp = requests.get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-    return resp.json()
+    """
+    Tries each proxy in PROXY_URL_TEMPLATES in turn, then falls back to a
+    direct request last (kept in case upsldc.org's block ever lifts).
+    Raises the last error if every attempt fails.
+    """
+    last_error = None
+
+    for template in PROXY_URL_TEMPLATES:
+        proxied_url = template.format(target=quote(url, safe=""))
+        try:
+            resp = requests.get(proxied_url, headers=HEADERS, timeout=25)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            print(f"Proxy failed ({proxied_url}): {e}")
+            last_error = e
+            time.sleep(2)
+
+    # Last resort: try direct, in case the block is ever lifted
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=20)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"Direct fetch failed ({url}): {e}")
+        last_error = e
+
+    raise RuntimeError(f"All fetch attempts failed for {url}: {last_error}")
 
 
 def extract_summary(summary_json):
