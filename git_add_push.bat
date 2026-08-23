@@ -20,16 +20,16 @@ set "timestamp=%dt:~0,4%-%dt:~4,2%-%dt:~6,2% %dt:~8,2%:%dt:~10,2%"
 git add -A
 git add --force upsldc_hourly_data.csv
 
-:: 4. Commit only if there are changes
+:: 4. Commit only if there are changes. --no-verify skips hooks
 git diff --cached --quiet
 if %errorlevel% neq 0 (
-    git commit -m "Force update UPSLDC data %timestamp%"
+    git commit -m "Force update UPSLDC data %timestamp%" --no-verify
 )
 
-:: 5. Pull with merge to avoid rebase conflicts
-git pull origin main
+:: 5. Pull with merge and --no-edit so it never opens editor
+git pull origin main --no-edit
 
-:: 6. Push. Use --force-with-lease because csv conflicts every hour
+:: 6. Push. --force-with-lease because csv conflicts every hour
 git push --force-with-lease origin main
 
 echo Done
