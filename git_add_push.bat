@@ -1,21 +1,29 @@
 @echo off
 cd /d D:\Git\upsldc
 
-:: 1. Stage everything including bat file changes
-git add -A
+:: 0. Nuke any stuck rebase and make sure we are on main
+if exist .git\rebase-merge rmdir /s /q .git\rebase-merge
+git checkout main
 
-:: 2. Commit local changes if any. 2>nul hides "nothing to commit" error
+:: 1. Get timestamp
 for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
 set "timestamp=%dt:~0,4%-%dt:~4,2%-%dt:~6,2% %dt:~8,2%:%dt:~10,2%"
-git commit -m "Auto commit %timestamp%" 2>nul
 
-:: 3. Remove and re-add csv to force track it
-git rm --cached upsldc_hourly_data.csv 2>nul
-git add upsldc_hourly_data.csv
-git commit -m "Force update UPSLDC data %timestamp%" 2>nul
+:: 2. Stage everything and force add csv
+git add -A
+git add --force upsldc_hourly_data.csv
 
-:: 4. Pull remote changes first, then push ours
-git pull --rebase origin main
-git push origin main
+:: 3. Commit only if there are changes
+git diff --cached --quiet
+if %errorlevel% neq 0 (
+    git commit -m "Force update UPSLDC data %timestamp%"
+)
+
+:: 4. Pull with merge instead of rebase to avoid getting stuck
+git pull origin main
+
+:: 5. Push. Use --force-with-lease because csv will conflict every hour
+git push --force-with-lease origin main
 
 echo Done
+pause
