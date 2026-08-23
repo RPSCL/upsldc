@@ -1,766 +1,412 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RPSCL — Hourly DC/SG Data</title>
-<style>
-  html{ scroll-behavior:smooth; }
-  :root{
-    /* dark navy (default) */
-    --bg:#0a1226;
-    --bg-2:#0d1730;
-    --panel:#111e3d;
-    --panel-2:#0e1a37;
-    --border:#233257;
-    --text:#e9eef9;
-    --muted:#8ea0c4;
-    --accent:#f0b043;
-    --accent-ink:#1c1204;
-    --shadow: 0 10px 30px -12px rgba(0,0,0,.55);
-  }
-  html[data-theme="light"]{
-    /* light sky blue */
-    --bg:#dff1fb;
-    --bg-2:#eaf6fd;
-    --panel:#ffffff;
-    --panel-2:#f4fbff;
-    --border:#c3e1f2;
-    --text:#122238;
-    --muted:#5c7794;
-    --accent:#e2932a;
-    --accent-ink:#1c1204;
-    --shadow: 0 10px 26px -14px rgba(20,60,90,.28);
-  }
+"""
+Fetches live UPSLDC data and appends one row to upsldc_hourly_data.csv
+in the repo root. Runs inside GitHub Actions on an hourly schedule.
+"""
 
-  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
-  button, .theme-toggle, input{ outline:none; }
-  button:focus-visible, .theme-toggle:focus-visible, input:focus-visible{
-    outline:2px solid var(--accent);
-    outline-offset:2px;
-  }
-  body{
-    margin:0;
-    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-    background:
-      radial-gradient(1100px 500px at 90% -10%, var(--bg-2), transparent),
-      var(--bg);
-    color:var(--text);
-    padding:26px 28px 40px;
-    scrollbar-width:thin;
-    scrollbar-color: var(--border) transparent;
-  }
-  body::-webkit-scrollbar{ width:10px; }
-  body::-webkit-scrollbar-track{ background:transparent; }
-  body::-webkit-scrollbar-thumb{
-    background:var(--border);
-    border-radius:999px;
-    border:2px solid var(--bg);
-    transition:background .2s ease;
-  }
-  body::-webkit-scrollbar-thumb:hover{ background:var(--accent); }
+import os
+import csv
+import time
+from datetime import datetime, timedelta
+from urllib.parse import quote
 
-  /* disable the browser's default view-transition crossfade —
-     we drive the clip-path animation ourselves */
-  ::view-transition-old(root),
-  ::view-transition-new(root){
-    animation:none;
-    mix-blend-mode:normal;
-  }
+import requests
 
-  @keyframes breathe-label{
-    0%{ transform:scale(1); }
-    50%{ transform:scale(.88); }
-    100%{ transform:scale(1); }
-  }
-  @keyframes breathe-btn{
-    0%{ transform:scale(1); }
-    50%{ transform:scale(.86); }
-    100%{ transform:scale(1); }
-  }
 
-  /* ---------- header ---------- */
-  .topbar{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:16px;
-    margin-bottom:22px;
-    flex-wrap:wrap;
-  }
-  .brand{
-    display:flex;
-    align-items:center;
-    gap:14px;
-    min-width:0;
-  }
-  .logo-wrap{
-    display:inline-flex;
-    cursor:default;
-    transition:transform .25s ease;
-    flex:0 0 auto;
-  }
-  .logo-wrap:hover{ transform:scale(1.09); }
-  .logo-wrap svg{ display:block; width:132px; height:40px; }
-  .brand-text{ min-width:0; }
-  .brand-text h1{
-    font-size:18px;
-    letter-spacing:.2px;
-    margin:0;
-    font-weight:700;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-  }
-  .brand-text .tag{
-    font-size:12px;
-    color:var(--muted);
-    margin-top:2px;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-  }
+MAIN_URL = "https://www.upsldc.org/assets/dataset/realtime.json"
+SUMMARY_URL = "https://www.upsldc.org/assets/dataset/real-time-summary.json"
 
-  /* ---------- theme toggle: one clickable pebble switch ---------- */
-  .theme-toggle{
-    position:relative;
-    width:68px;
-    height:36px;
-    border-radius:999px;
-    border:1px solid var(--border);
-    box-shadow:var(--shadow);
-    cursor:pointer;
-    user-select:none;
-    transition:background .35s ease, border-color .35s ease;
-    overflow:visible;
-    flex:0 0 auto;
-  }
-  html[data-theme="light"] .theme-toggle{
-    background:linear-gradient(135deg,#bfe4fb,#eaf6fd);
-  }
-  html[data-theme="dark"] .theme-toggle{
-    background:linear-gradient(135deg,#0d1730,#1a2b52);
-  }
-  .theme-toggle:hover{ border-color:var(--accent); }
-  .theme-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+OUTPUT_CSV = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)),
+    "upsldc_hourly_data.csv"
+)
 
-  .theme-toggle .star{
-    position:absolute;
-    width:2.5px; height:2.5px;
-    border-radius:50%;
-    background:#fff;
-    opacity:0;
-    transition:opacity .3s ease;
-  }
-  .theme-toggle .star.s1{ top:9px; left:14px; }
-  .theme-toggle .star.s2{ top:20px; left:20px; }
-  html[data-theme="dark"] .theme-toggle .star{ opacity:.85; }
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    )
+}
 
-  .theme-toggle .thumb{
-    position:absolute;
-    top:3px;
-    left:3px;
-    width:28px;
-    height:28px;
-    border-radius:50%;
-    box-shadow:0 3px 8px rgba(0,0,0,.3);
-    transition:transform .28s cubic-bezier(.4,0,.2,1), background .3s ease;
-    z-index:2;
-  }
-  html[data-theme="light"] .theme-toggle .thumb{ background:var(--accent); }
-  html[data-theme="dark"] .theme-toggle .thumb{ background:#eef2f8; transform:translateX(32px); }
 
-  .theme-toggle .thumb::before{
-    content:'';
-    position:absolute;
-    inset:-7px;
-    border-radius:50%;
-    background:repeating-conic-gradient(var(--accent) 0deg 4deg, transparent 4deg 45deg);
-    opacity:0;
-    transform:scale(.55);
-    transition:opacity .25s ease, transform .25s ease;
-    z-index:-1;
-  }
-  html[data-theme="light"] .theme-toggle .thumb::before{
-    opacity:.9;
-    transform:scale(1);
-  }
+PROXY_URL_TEMPLATES = [
+    "https://api.codetabs.com/v1/proxy?quest={target}",
+    "https://api.allorigins.win/raw?url={target}",
+]
 
-  .theme-toggle .thumb::after{
-    content:'';
-    position:absolute;
-    inset:0;
-    border-radius:50%;
-    background:
-      radial-gradient(circle at 32% 30%, rgba(20,30,55,.22) 0 16%, transparent 17%),
-      radial-gradient(circle at 65% 55%, rgba(20,30,55,.16) 0 11%, transparent 12%),
-      radial-gradient(circle at 45% 72%, rgba(20,30,55,.14) 0 9%, transparent 10%);
-    opacity:0;
-    transition:opacity .25s ease;
-  }
-  html[data-theme="dark"] .theme-toggle .thumb::after{ opacity:1; }
 
-  /* ---------- panels ---------- */
-  .panel{
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:16px;
-    padding:16px;
-    margin-bottom:18px;
-    box-shadow:var(--shadow);
-  }
-  .controls-row{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    flex-wrap:wrap;
-    gap:14px;
-  }
-  .btn-group{ display:flex; gap:10px; flex-wrap:wrap; }
+PLANT_SEQUENCE = [
+    "MEJA",
+    "LANCO",
+    "BARA",
+    "TANDA",
+    "LALITPUR",
+    "Harduaganj Ex2",
+    "ROSA 1",
+    "ROSA 2",
+]
 
-  /* ---------- buttons: neutral surface, motion-driven feedback ---------- */
-  button.action{
-    background:var(--panel-2);
-    color:var(--text);
-    border:1px solid var(--border);
-    padding:9px 20px;
-    border-radius:999px;
-    font-size:13px;
-    font-weight:700;
-    cursor:pointer;
-    transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;
-  }
-  button.action .btn-label{
-    display:inline-block;
-    transition:transform .15s ease;
-  }
-  button.action:hover:not(:disabled){
-    transform:translateY(-2px);
-    border-color:var(--accent);
-    box-shadow:var(--shadow);
-  }
-  button.action:hover:not(:disabled) .btn-label{ transform:scale(1.08); }
-  button.action:active:not(:disabled) .btn-label{ animation:breathe-label 50ms ease-in-out; }
-  button.action:disabled{
-    opacity:.4;
-    cursor:not-allowed;
-    transform:none;
-    box-shadow:none;
-  }
 
-  /* date selector */
-  .date-nav{
-    display:flex;
-    align-items:center;
-    gap:8px;
-    flex:0 0 auto;
-  }
-  .date-nav button.arrow{
-    width:34px;
-    height:34px;
-    border-radius:999px;
-    border:1px solid var(--border);
-    background:var(--panel-2);
-    color:var(--text);
-    font-size:15px;
-    cursor:pointer;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    transition:border-color .15s ease, color .15s ease, transform .15s ease;
-  }
-  .date-nav button.arrow:hover:not(:disabled){
-    border-color:var(--accent);
-    color:var(--accent);
-    transform:translateY(-2px) scale(1.08);
-  }
-  .date-nav button.arrow:active:not(:disabled){ animation:breathe-btn 50ms ease-in-out; }
-  .date-nav button.arrow:disabled{
-    opacity:.35;
-    cursor:not-allowed;
-    border-color:var(--border);
-    color:var(--muted);
-    transform:none;
-  }
-  .date-nav input[type="date"]{
-    background:var(--panel-2);
-    border:1px solid var(--border);
-    color:var(--text);
-    border-radius:999px;
-    padding:7px 14px;
-    font-size:13px;
-    font-family:inherit;
-    color-scheme: dark;
-  }
-  html[data-theme="light"] .date-nav input[type="date"]{ color-scheme: light; }
-  /* the default calendar-picker icon renders near-black — invert it so it's
-     visible on the dark navy theme, since this native picker is the phone's
-     own calendar UI and is the best option for date entry on mobile */
-  .date-nav input[type="date"]::-webkit-calendar-picker-indicator{
-    cursor:pointer;
-    filter:invert(1);
-    opacity:.75;
-  }
-  html[data-theme="light"] .date-nav input[type="date"]::-webkit-calendar-picker-indicator{
-    filter:none;
-    opacity:.6;
-  }
+PLANT_MAPPING = {
+    "MEJA": "MejaUrjaNigamPvtLtd",
+    "LANCO": "MEILANPARAENERGYLIMITED",
+    "BARA": "PRAYAGRAJSUPERCRITICALTPPBARA",
+    "TANDA": "THDCIndiaLimitedKhurja",
+    "LALITPUR": "LALITPURPOWERGENERATIONCOMPANYLIMITED",
+    "Harduaganj Ex2": "Harduaganj1X660MWUPRVUNL",
+    "ROSA 1": "ROSA-I",
+    "ROSA 2": "ROSA-II",
+}
 
-  .status{ color:var(--muted); font-size:12px; margin-top:10px; }
 
-  /* ---------- table ---------- */
-  .table-wrap{
-    overflow-x:auto;
-    overflow-y:auto;
-    border:1px solid var(--border);
-    border-radius:12px;
-    max-height:70vh;
-    scroll-behavior:smooth;
-    -webkit-overflow-scrolling:touch;
-    scrollbar-width:thin;
-    scrollbar-color: var(--border) transparent;
-  }
-  .table-wrap::-webkit-scrollbar{ width:10px; height:10px; }
-  .table-wrap::-webkit-scrollbar-track{ background:transparent; }
-  .table-wrap::-webkit-scrollbar-thumb{
-    background:var(--border);
-    border-radius:999px;
-    border:2px solid var(--panel);
-    background-clip:padding-box;
-    transition:background .2s ease;
-  }
-  .table-wrap::-webkit-scrollbar-thumb:hover{ background:var(--accent); }
-  .table-wrap::-webkit-scrollbar-corner{ background:transparent; }
+def header_row():
+    header = ["Date", "Time", "TOTAL_DEMAND", "SOLAR_GEN"]
 
-  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
-  th,td{
-    padding:8px 11px;
-    text-align:right;
-    border-bottom:1px solid var(--border);
-    white-space:nowrap;
-  }
-  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){
-    text-align:left;
-  }
-  th{
-    color:var(--muted);
-    font-weight:700;
-    font-size:10.5px;
-    text-transform:uppercase;
-    letter-spacing:.03em;
-    position:sticky;
-    top:0;
-    background:var(--panel);
-  }
-  tbody tr:hover td{ background:var(--panel-2); }
-  td.rosa-total, th.rosa-total{
-    color:var(--accent);
-    font-weight:700;
-  }
-  tr.missing-row td{
-    background:var(--panel-2);
-    color:var(--muted);
-  }
-  .empty-state{
-    padding:34px 16px;
-    text-align:center;
-    color:var(--muted);
-    font-size:13px;
-  }
+    for key in PLANT_SEQUENCE:
+        header += [
+            f"{key}_DC",
+            f"{key}_SG",
+            f"{key}_AG",
+        ]
 
-  /* ---------- mobile: single-row header, single-row controls ---------- */
-  @media (max-width:640px){
-    body{ padding:14px 12px 26px; }
-    .topbar{ flex-wrap:nowrap; gap:10px; margin-bottom:16px; }
-    .brand{ gap:8px; flex:1 1 auto; }
-    .logo-wrap svg{ width:88px; height:27px; }
-    .brand-text h1{ font-size:13.5px; }
-    .brand-text .tag{ display:none; }
-    .theme-toggle{ width:52px; height:28px; }
-    .theme-toggle .thumb{ width:20px; height:20px; top:3px; left:3px; }
-    html[data-theme="dark"] .theme-toggle .thumb{ transform:translateX(24px); }
+    return header
 
-    .panel{ padding:12px; border-radius:14px; }
-    .controls-row{
-      flex-direction:column;
-      align-items:stretch;
-      flex-wrap:nowrap;
-      gap:10px;
+
+def clean(s):
+    return (s or "").lower().replace(" ", "")
+
+
+def prepare_csv():
+    """
+    Always runs first.
+
+    1. Creates CSV with header if it doesn't exist.
+    2. Adds/replaces header if the existing file has no valid header.
+    3. Deletes rows older than 120 days.
+    """
+
+    expected_header = header_row()
+
+    # CSV does not exist
+    if not os.path.exists(OUTPUT_CSV):
+        with open(
+            OUTPUT_CSV,
+            "w",
+            newline="",
+            encoding="utf-8"
+        ) as f:
+            writer = csv.writer(f)
+            writer.writerow(expected_header)
+
+        return
+
+    # Read all existing rows
+    with open(
+        OUTPUT_CSV,
+        "r",
+        newline="",
+        encoding="utf-8"
+    ) as f:
+        rows = list(csv.reader(f))
+
+    if not rows:
+        rows = []
+
+    # Check whether first row is the correct header
+    has_valid_header = (
+        len(rows) > 0
+        and rows[0] == expected_header
+    )
+
+    if has_valid_header:
+        data_rows = rows[1:]
+    else:
+        # Assume all existing rows are data
+        data_rows = rows
+
+    cutoff_date = datetime.now().date() - timedelta(days=120)
+
+    valid_rows = []
+
+    for row in data_rows:
+
+        # Ignore completely empty rows
+        if not row or not any(cell.strip() for cell in row):
+            continue
+
+        try:
+            row_date = datetime.strptime(
+                row[0].strip(),
+                "%d-%b-%Y"
+            ).date()
+
+            # Keep only last 120 days of data
+            if row_date >= cutoff_date:
+                valid_rows.append(row)
+
+        except (ValueError, IndexError):
+            # Keep rows that cannot be interpreted as dates
+            # so valid data is not accidentally deleted
+            valid_rows.append(row)
+
+    # Rewrite cleaned CSV with the correct header
+    with open(
+        OUTPUT_CSV,
+        "w",
+        newline="",
+        encoding="utf-8"
+    ) as f:
+        writer = csv.writer(f)
+
+        writer.writerow(expected_header)
+        writer.writerows(valid_rows)
+
+
+def fetch_json(url):
+    """
+    Tries each proxy, then falls back to direct request.
+    """
+
+    last_error = None
+
+    for template in PROXY_URL_TEMPLATES:
+
+        proxied_url = template.format(
+            target=quote(url, safe="")
+        )
+
+        try:
+            resp = requests.get(
+                proxied_url,
+                headers=HEADERS,
+                timeout=25
+            )
+
+            resp.raise_for_status()
+
+            return resp.json()
+
+        except Exception as e:
+            last_error = e
+            time.sleep(2)
+
+    # Last resort: direct request
+    try:
+        resp = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=20
+        )
+
+        resp.raise_for_status()
+
+        return resp.json()
+
+    except Exception as e:
+        last_error = e
+
+    raise RuntimeError(
+        f"All fetch attempts failed for {url}: {last_error}"
+    )
+
+
+def extract_summary(summary_json):
+
+    demand = None
+    solar = None
+
+    def scan(obj):
+
+        nonlocal demand, solar
+
+        if isinstance(obj, dict):
+
+            for k, v in obj.items():
+
+                if k.upper() == "DEMAND_MW" and demand is None:
+                    demand = v
+
+                if (
+                    k.upper() == "RE_SOLAR_GENERATION_MW"
+                    and solar is None
+                ):
+                    solar = v
+
+                scan(v)
+
+        elif isinstance(obj, list):
+
+            for item in obj:
+                scan(item)
+
+    scan(summary_json)
+
+    return demand, solar
+
+
+def extract_plants(main_json):
+
+    plant_data = {
+        key: {
+            "DC": 0,
+            "SG": 0,
+            "AG": 0
+        }
+        for key in PLANT_SEQUENCE
     }
-    .btn-group{
-      width:100%;
-      flex-wrap:nowrap;
-      gap:8px;
-    }
-    .btn-group button.action{ flex:1 1 0; padding:10px 6px; font-size:11.5px; white-space:nowrap; text-align:center; }
-    .date-nav{ width:100%; flex-wrap:nowrap; justify-content:center; }
-    .date-nav input[type="date"]{ flex:1 1 auto; padding:8px 10px; font-size:12.5px; min-height:36px; text-align:center; }
-  }
-</style>
-</head>
-<body>
 
-<div class="topbar">
-  <div class="brand">
-    <span class="logo-wrap" title="RPSCL">
-      <svg viewBox="0 0 132 40" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="8,2 2,20 9,20 5,38 20,16 12,16 17,2" fill="var(--accent)"/>
-        <text x="27" y="27" font-family="Segoe UI, system-ui, sans-serif" font-size="21" font-weight="800" letter-spacing="1" fill="var(--text)">RPSCL</text>
-      </svg>
-    </span>
-    <div class="brand-text">
-      <h1>Hourly DC / SG Data</h1>
-      <div class="tag">Generator declared capacity, schedule &amp; actuals</div>
-    </div>
-  </div>
+    all_generators = []
 
-  <div class="theme-toggle" id="themeToggle" role="switch" aria-checked="false" aria-label="Toggle dark mode" tabindex="0">
-    <span class="star s1"></span>
-    <span class="star s2"></span>
-    <span class="thumb"></span>
-  </div>
-</div>
+    if isinstance(main_json, dict):
 
-<div class="panel">
-  <div class="controls-row">
-    <div class="btn-group">
-      <button class="action" onclick="loadData()"><span class="btn-label">Refresh</span></button>
-      <button class="action" id="downloadBtn" onclick="downloadCSV()"><span class="btn-label">Download CSV</span></button>
-      <button class="action" onclick="createChart()"><span class="btn-label">Create Chart</span></button>
-    </div>
-    <div class="date-nav">
-      <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
-      <input type="date" id="dateInput" min="2026-08-23">
-      <button class="arrow" id="nextDay" onclick="stepDate(1)" aria-label="Next day">&#8250;</button>
-    </div>
-  </div>
-  <div class="status" id="status">Loading...</div>
-</div>
+        for v in main_json.values():
 
-<div class="panel">
-  <div class="table-wrap">
-    <table id="dataTable">
-      <thead><tr id="headRow"></tr></thead>
-      <tbody id="bodyRows"></tbody>
-    </table>
-  </div>
-</div>
+            if isinstance(v, list):
+                all_generators.extend(v)
 
-<script>
-const CSV_PATH = 'upsldc_hourly_data.csv';
-const MIN_DATE = new Date(2026, 7, 23); // 23-Aug-2026, months are 0-indexed
-function today(){ const t = new Date(); t.setHours(0,0,0,0); return t; }
+    elif isinstance(main_json, list):
 
-let allRows = [];      // array of row arrays (excluding header)
-let rawHeader = [];    // original header cells
-let displayHeader = []; // formatted header cells, with Rosa Total columns inserted
-let rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
-let insertAfterIdx = -1;
-let timeColIdx = 1;
-let currentRawCSVForDate = ''; // csv text for the currently selected date, for download
-let selectedISO = '';
+        all_generators = main_json
 
-function parseCSV(text){
-  return text.trim().split('\n').map(line => line.split(','));
-}
 
-function normalizeHeader(h){
-  return h.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
-}
+    for gen in all_generators:
 
-function formatHeaderLabel(h){
-  const words = h.trim().replace(/_/g,' ').split(/\s+/);
-  return words.map(w=>{
-    const up = w.toUpperCase();
-    if(up === 'DC' || up === 'SG' || up === 'AG') return up;
-    if(/^\d+$/.test(w)) return w;
-    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-  }).join(' ');
-}
+        if not isinstance(gen, dict):
+            continue
 
-// Parses a CSV-style date cell like "23-Aug-2026" or "23-Aug-26" into a Date object.
-function parseCellDate(cell){
-  const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
-  const m = cell.trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2}|\d{4})$/);
-  if(!m) return null;
-  const mon = months[m[2].toLowerCase()];
-  if(mon === undefined) return null;
-  let year = parseInt(m[3],10);
-  if(m[3].length === 2) year += 2000; // 2-digit year: assume 21st century
-  return new Date(year, mon, parseInt(m[1],10));
-}
+        gen_name = clean(
+            gen.get("GEN_NAME", "")
+        )
 
-function isoOf(d){
-  const y = d.getFullYear();
-  const mo = String(d.getMonth()+1).padStart(2,'0');
-  const da = String(d.getDate()).padStart(2,'0');
-  return `${y}-${mo}-${da}`;
-}
+        actual = gen.get("ACTUAL", 0) or 0
+        schedule = gen.get("SCHEDULE", 0) or 0
+        dc = gen.get("DC", 0) or 0
 
-// hour prefix ("01".."23","00") from a time cell like "17:20"
-function hourOf(cell){
-  const m = cell.trim().match(/^(\d{1,2}):/);
-  if(!m) return null;
-  return m[1].padStart(2,'0');
-}
+        matched_key = None
 
-async function loadData(){
-  const status = document.getElementById('status');
-  try{
-    const res = await fetch(CSV_PATH + '?t=' + Date.now());
-    if(!res.ok) throw new Error('HTTP ' + res.status);
-    const text = await res.text();
-    const rows = parseCSV(text);
-    rawHeader = rows[0] || [];
-    allRows = rows.slice(1).filter(r => r.length === rawHeader.length);
 
-    buildHeaderPlan();
+        # Exact match
+        for key, mapped_name in PLANT_MAPPING.items():
 
-    // default selection is always today's date, clamped to the allowed range
-    let defaultDate = today();
-    if(defaultDate < MIN_DATE) defaultDate = MIN_DATE;
+            if gen_name == clean(mapped_name):
 
-    const dateInput = document.getElementById('dateInput');
-    dateInput.max = isoOf(today());
-    if(!dateInput.value){
-      dateInput.value = isoOf(defaultDate);
-    }
-    renderForSelectedDate();
-    status.textContent = 'Last refreshed ' + new Date().toLocaleTimeString();
-  }catch(err){
-    // stay silent — no CSV yet is a normal, expected state, not an error to surface
-    status.textContent = '';
-    document.getElementById('downloadBtn').disabled = true;
-    document.getElementById('bodyRows').innerHTML = '';
-    document.getElementById('headRow').innerHTML = '';
-  }
-}
+                matched_key = key
+                break
 
-function buildHeaderPlan(){
-  displayHeader = rawHeader.map(formatHeaderLabel);
-  rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
-  insertAfterIdx = -1;
-  timeColIdx = 1;
 
-  rawHeader.forEach((h, i)=>{
-    const n = normalizeHeader(h);
-    if(n === 'TIME') timeColIdx = i;
-    if(n === 'ROSA1DC') rosaColIdx.dc[0] = i;
-    if(n === 'ROSA2DC') rosaColIdx.dc[1] = i;
-    if(n === 'ROSA1SG') rosaColIdx.sg[0] = i;
-    if(n === 'ROSA2SG') rosaColIdx.sg[1] = i;
-    if(n === 'ROSA1AG') rosaColIdx.ag[0] = i;
-    if(n === 'ROSA2AG') rosaColIdx.ag[1] = i;
-    if(n === 'ROSA2AG') insertAfterIdx = i;
-  });
-}
+        # Partial match
+        if matched_key is None:
 
-function addRosaTotals(row){
-  if(insertAfterIdx === -1) return row.slice();
-  const out = row.slice(0, insertAfterIdx + 1);
-  const totals = ['dc','sg','ag'].map(key=>{
-    const [i1, i2] = rosaColIdx[key];
-    if(i1 === -1 || i2 === -1) return '';
-    const a = parseFloat(row[i1]);
-    const b = parseFloat(row[i2]);
-    if(isNaN(a) || isNaN(b)) return '';
-    return String(a + b);
-  });
-  return out.concat(totals, row.slice(insertAfterIdx + 1));
-}
+            for key, mapped_name in PLANT_MAPPING.items():
 
-function stepDate(delta){
-  const input = document.getElementById('dateInput');
-  const cur = input.valueAsDate || MIN_DATE;
-  const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + delta);
-  if(next < MIN_DATE || next > today()) return;
-  input.value = isoOf(next);
-  renderForSelectedDate();
-}
+                short = clean(mapped_name)[:13]
 
-// Chronological 01:00 -> 00:00 (24 hour) slot list for a day.
-function fullDayHourSlots(){
-  const slots = [];
-  for(let h = 1; h <= 23; h++) slots.push(String(h).padStart(2,'0'));
-  slots.push('00');
-  return slots;
-}
+                if short and short in gen_name:
 
-function renderForSelectedDate(){
-  const input = document.getElementById('dateInput');
-  const sel = input.valueAsDate;
-  if(!sel) return;
-  selectedISO = isoOf(sel);
+                    matched_key = key
+                    break
 
-  document.getElementById('prevDay').disabled = (selectedISO <= isoOf(MIN_DATE));
-  document.getElementById('nextDay').disabled = (selectedISO >= isoOf(today()));
 
-  const rowsForDate = allRows.filter(r=>{
-    const d = parseCellDate(r[0]);
-    return d && isoOf(d) === selectedISO;
-  });
+        if matched_key:
 
-  const headRow = document.getElementById('headRow');
-  const bodyRows = document.getElementById('bodyRows');
-  const downloadBtn = document.getElementById('downloadBtn');
-  const status = document.getElementById('status');
+            try:
 
-  if(rowsForDate.length === 0){
-    headRow.innerHTML = '';
-    bodyRows.innerHTML = '<tr><td class="empty-state" colspan="1">No data logged for this date yet.</td></tr>';
-    downloadBtn.disabled = true;
-    currentRawCSVForDate = '';
-    status.textContent = 'No data logged for ' + selectedISO + ' yet.';
-    return;
-  }
+                plant_data[matched_key] = {
 
-  // map hour -> ALL matching rows (a hydrated CSV can have more than one entry per hour)
-  const byHour = {};
-  rowsForDate.forEach(r=>{
-    const hr = hourOf(r[timeColIdx] || '');
-    if(hr){
-      if(!byHour[hr]) byHour[hr] = [];
-      byHour[hr].push(r);
-    }
-  });
-  Object.keys(byHour).forEach(hr=>{
-    byHour[hr].sort((a,b)=> (a[timeColIdx]||'').localeCompare(b[timeColIdx]||'', undefined, {numeric:true}));
-  });
+                    "DC": round(float(dc)),
+                    "SG": round(float(schedule)),
+                    "AG": round(float(actual)),
+                }
 
-  const fullHeader = insertAfterIdx === -1
-    ? displayHeader
-    : displayHeader.slice(0, insertAfterIdx + 1).concat(['Rosa Total DC','Rosa Total SG','Rosa Total AG'], displayHeader.slice(insertAfterIdx + 1));
+            except (TypeError, ValueError):
+                pass
 
-  headRow.innerHTML = fullHeader.map((h,i)=>{
-    const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
-    return `<th${isRosaTotal ? ' class="rosa-total"' : ''}>${h}</th>`;
-  }).join('');
 
-  // Trim to the span between the first and last hour that actually has data —
-  // no placeholder rows before the first entry or after the most recent one.
-  const allSlots = fullDayHourSlots(); // chronological 01..23,00
-  const dataIdxs = allSlots
-    .map((hr, i) => (byHour[hr] && byHour[hr].length ? i : -1))
-    .filter(i => i >= 0);
-  const firstIdx = Math.min(...dataIdxs);
-  const lastIdx = Math.max(...dataIdxs);
-  const slots = allSlots.slice(firstIdx, lastIdx + 1); // smallest time first
+    return plant_data
 
-  const slotRows = [];
-  slots.forEach(hr=>{
-    const arr = byHour[hr];
-    if(arr && arr.length){
-      arr.forEach(raw => slotRows.push({ missing:false, cells: addRosaTotals(raw) }));
-    } else {
-      const blank = new Array(fullHeader.length).fill('');
-      blank[timeColIdx] = hr + ':00';
-      slotRows.push({ missing:true, cells: blank });
-    }
-  });
 
-  bodyRows.innerHTML = slotRows.map(entry=>{
-    const rowClass = entry.missing ? ' class="missing-row"' : '';
-    const tds = entry.cells.map((c,i)=>{
-      const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
-      return `<td${isRosaTotal ? ' class="rosa-total"' : ''}>${c}</td>`;
-    }).join('');
-    return `<tr${rowClass}>${tds}</tr>`;
-  }).join('');
+def round_to_nearest_10_minutes(dt):
+    discard = timedelta(
+        minutes=dt.minute % 15,
+        seconds=dt.second,
+        microseconds=dt.microsecond
+    )
 
-  // CSV mirrors the same trimmed range; missing hours inside it are fully empty rows,
-  // and hours with multiple logged entries include all of them.
-  const csvSlotRows = [];
-  slots.forEach(hr=>{
-    const arr = byHour[hr];
-    if(arr && arr.length){
-      arr.forEach(raw => csvSlotRows.push(raw));
-    } else {
-      csvSlotRows.push(new Array(rawHeader.length).fill(''));
-    }
-  });
-  currentRawCSVForDate = [rawHeader.join(',')].concat(csvSlotRows.map(r=>r.join(','))).join('\n');
+    rounded = dt - discard
 
-  downloadBtn.disabled = false;
-  status.textContent = 'Loaded ' + rowsForDate.length + ' logged hour(s) for ' + selectedISO + '.';
-}
+    # If remainder is 5 minutes or more, round upward
+    if dt.minute % 15 >= 8:
+        rounded += timedelta(minutes=15)
 
-function downloadCSV(){
-  if(!currentRawCSVForDate){ alert('No data loaded yet.'); return; }
-  const blob = new Blob([currentRawCSVForDate], {type:'text/csv'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'upsldc_' + selectedISO + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
+    return rounded
 
-function createChart(){
-  alert('Chart not yet configured.');
-}
 
-/* ---------- theme handling with a swift circular transition from the toggle ---------- */
-function applyTheme(theme){
-  document.documentElement.setAttribute('data-theme', theme);
-  document.getElementById('themeToggle').setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
-  try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
-}
+def build_row(main_json, summary_json):
 
-function toggleTheme(){
-  const toggleEl = document.getElementById('themeToggle');
-  const rect = toggleEl.getBoundingClientRect();
-  const x = rect.left + rect.width / 2;
-  const y = rect.top + rect.height / 2;
+    now = round_to_nearest_10_minutes(
+        datetime.now()
+    )
 
-  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-  const newTheme = isDark ? 'light' : 'dark';
+    date_str = now.strftime("%d-%b-%y")
+    time_str = now.strftime("%H:%M")
 
-  if(!document.startViewTransition){
-    applyTheme(newTheme);
-    return;
-  }
+    demand, solar = extract_summary(summary_json)
 
-  const transition = document.startViewTransition(() => applyTheme(newTheme));
-  transition.ready.then(() => {
-    const endRadius = Math.hypot(
-      Math.max(x, window.innerWidth - x),
-      Math.max(y, window.innerHeight - y)
-    );
-    const clipPath = [
-      `circle(0px at ${x}px ${y}px)`,
-      `circle(${endRadius}px at ${x}px ${y}px)`
-    ];
-    if(newTheme === 'light'){
-      document.documentElement.animate(
-        { clipPath },
-        { duration: 190, easing: 'ease-out', pseudoElement: '::view-transition-new(root)' }
-      );
-    } else {
-      document.documentElement.animate(
-        { clipPath: clipPath.slice().reverse() },
-        { duration: 190, easing: 'ease-in', pseudoElement: '::view-transition-old(root)' }
-      );
-    }
-  });
-}
+    plants = extract_plants(main_json)
 
-(function initTheme(){
-  let theme = 'dark';
-  try{
-    const saved = localStorage.getItem('rpscl-theme');
-    if(saved) theme = saved;
-    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light';
-  }catch(e){}
-  applyTheme(theme);
-})();
-const themeToggleEl = document.getElementById('themeToggle');
-themeToggleEl.addEventListener('click', toggleTheme);
-themeToggleEl.addEventListener('keydown', (e)=>{
-  if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleTheme(); }
-});
-document.getElementById('dateInput').addEventListener('change', renderForSelectedDate);
+    row = [
+        date_str,
+        time_str,
+        demand,
+        solar
+    ]
 
-loadData();
-</script>
-</body>
-</html>
+    for key in PLANT_SEQUENCE:
+
+        p = plants[key]
+
+        row += [
+            p["DC"],
+            p["SG"],
+            p["AG"]
+        ]
+
+    return row
+
+
+def append_row(row):
+
+    with open(
+        OUTPUT_CSV,
+        "a",
+        newline="",
+        encoding="utf-8"
+    ) as f:
+
+        writer = csv.writer(f)
+
+        writer.writerow(row)
+
+
+def main():
+
+    # ALWAYS RUN THIS FIRST:
+    # Create/fix header and delete data older than 120 days
+    prepare_csv()
+
+    # Only after cleanup, attempt UPSLDC fetch
+    main_json = fetch_json(MAIN_URL)
+
+    summary_json = fetch_json(SUMMARY_URL)
+
+    row = build_row(
+        main_json,
+        summary_json
+    )
+
+    append_row(row)
+
+    print("Successful")
+
+
+if __name__ == "__main__":
+    main()
