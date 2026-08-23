@@ -403,6 +403,69 @@
     font-size:13px;
   }
 
+  /* ---------- live chart overlay ---------- */
+  .chart-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.55);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:100;
+  }
+  .chart-overlay[hidden]{ display:none; }
+  .chart-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:18px;
+    box-shadow:var(--shadow);
+    width:min(1150px, 100%);
+    max-height:92vh;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    padding:18px 20px 20px;
+  }
+  .chart-panel-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+  }
+  .chart-panel-head h2{ margin:0; font-size:16px; }
+  .chart-panel-head .chart-sub{ color:var(--muted); font-size:12px; margin-top:2px; }
+  .chart-close{
+    width:32px;
+    height:32px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--text);
+    font-size:16px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 auto;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .chart-close:active{ border-color:var(--accent); color:var(--accent); }
+  @media (hover:hover) and (pointer:fine){
+    .chart-close:hover{ border-color:var(--accent); color:var(--accent); }
+  }
+  .chart-canvas-wrap{
+    position:relative;
+    flex:1 1 auto;
+    min-height:0;
+    height:min(60vh, 520px);
+  }
+  @media (max-width:640px){
+    .chart-overlay{ padding:10px; }
+    .chart-panel{ padding:14px; border-radius:14px; }
+    .chart-canvas-wrap{ height:52vh; }
+  }
+
   /* ---------- mobile: single-row header, single-row controls ---------- */
   @media (max-width:640px){
     body{ padding:14px 12px 26px; }
@@ -463,7 +526,7 @@
     <div class="btn-group">
       <button class="action" onclick="loadData()"><span class="btn-label">Refresh</span></button>
       <button class="action" id="downloadBtn" onclick="downloadCSV()"><span class="btn-label">Download CSV</span></button>
-      <button class="action" onclick="createChart()"><span class="btn-label">Create Chart</span></button>
+      <button class="action" onclick="openLiveChart()"><span class="btn-label">Live Chart</span></button>
     </div>
     <div class="date-nav">
       <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
@@ -489,6 +552,22 @@
   </div>
 </div>
 
+<div class="chart-overlay" id="chartOverlay" hidden>
+  <div class="chart-panel" role="dialog" aria-modal="true" aria-label="Live chart">
+    <div class="chart-panel-head">
+      <div>
+        <h2>Live Chart — Actual Generation</h2>
+        <div class="chart-sub" id="chartSub"></div>
+      </div>
+      <button class="chart-close" id="chartCloseBtn" aria-label="Close chart">&#10005;</button>
+    </div>
+    <div class="chart-canvas-wrap">
+      <canvas id="liveChartCanvas"></canvas>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 <script>
 const CSV_PATH = 'upsldc_hourly_data.csv';
 const MIN_DATE = new Date(2026, 7, 23); // 23-Aug-2026, months are 0-indexed
@@ -547,8 +626,9 @@ function hourOf(cell){
   return m[1].padStart(2,'0');
 }
 
-async function loadData(){
+async function loadData(silent){
   const status = document.getElementById('status');
+  if(!silent) status.textContent = 'Loading...';
   try{
     const res = await fetch(CSV_PATH + '?t=' + Date.now());
     if(!res.ok) throw new Error('HTTP ' + res.status);
@@ -725,6 +805,8 @@ function renderForSelectedDate(){
 
   downloadBtn.disabled = false;
   status.textContent = 'Loaded ' + rowsForDate.length + ' logged hour(s) for ' + selectedISO + '.';
+
+  updateLiveChartIfOpen(rowsForDate);
 }
 
 function downloadCSV(){
@@ -738,15 +820,187 @@ function downloadCSV(){
   URL.revokeObjectURL(url);
 }
 
-function createChart(){
-  alert('Chart not yet configured.');
+/* ---------- live chart: all *_AG series vs time, Total Demand on its own scale ---------- */
+let liveChart = null;
+let chartOverlayOpen = false;
+
+function getAGSeriesMeta(){
+  const metas = [];
+  rawHeader.forEach((h,i)=>{
+    if(i === timeColIdx) return;
+    const n = normalizeHeader(h);
+    if(n.endsWith('AG')) metas.push({ idx:i, label: formatHeaderLabel(h) });
+  });
+  return metas;
 }
+
+function getTotalDemandIdx(){
+  let idx = -1;
+  rawHeader.forEach((h,i)=>{ if(normalizeHeader(h) === 'TOTALDEMAND') idx = i; });
+  return idx;
+}
+
+const CHART_PALETTE = ['#ff6b6b','#4dabf7','#51cf66','#f59f00','#cc5de8','#20c997','#ff922b','#5c7cfa','#ff8fa3','#66d9e8'];
+
+function buildChartData(rowsForDate){
+  const sorted = rowsForDate.slice().sort((a,b)=>
+    (a[timeColIdx]||'').localeCompare(b[timeColIdx]||'', undefined, {numeric:true})
+  );
+  const labels = sorted.map(r => r[timeColIdx]);
+  const agMetas = getAGSeriesMeta();
+
+  const agDatasets = agMetas.map((m,i)=>({
+    label: m.label,
+    data: sorted.map(r => parseFloat(r[m.idx])),
+    borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    yAxisID: 'yAG',
+    tension: .25,
+    borderWidth: 2,
+    pointRadius: 3,
+    pointHoverRadius: 5,
+    spanGaps: true,
+  }));
+
+  const demandIdx = getTotalDemandIdx();
+  const datasets = agDatasets.slice();
+  if(demandIdx >= 0){
+    datasets.push({
+      label: 'Total Demand',
+      data: sorted.map(r => parseFloat(r[demandIdx])),
+      borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+      backgroundColor: 'transparent',
+      yAxisID: 'yDemand',
+      borderDash: [6,4],
+      borderWidth: 2.5,
+      tension: .25,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      spanGaps: true,
+    });
+  }
+  return { labels, datasets };
+}
+
+function chartThemeColors(){
+  const cs = getComputedStyle(document.documentElement);
+  return {
+    text: cs.getPropertyValue('--text').trim(),
+    muted: cs.getPropertyValue('--muted').trim(),
+    border: cs.getPropertyValue('--border').trim(),
+    panel: cs.getPropertyValue('--panel').trim(),
+  };
+}
+
+function buildChartOptions(){
+  const c = chartThemeColors();
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 250 },
+    interaction: { mode: 'index', intersect: false },
+    plugins:{
+      legend:{ labels:{ color:c.text, boxWidth:12, usePointStyle:true, font:{ size:11 } } },
+      tooltip:{
+        backgroundColor:c.panel,
+        titleColor:c.text,
+        bodyColor:c.text,
+        borderColor:c.border,
+        borderWidth:1,
+        padding:10,
+      }
+    },
+    scales:{
+      x:{ ticks:{ color:c.muted, maxRotation:0, autoSkip:true }, grid:{ color:c.border } },
+      yAG:{
+        position:'left',
+        ticks:{ color:c.muted },
+        grid:{ color:c.border },
+        title:{ display:true, text:'Actual Generation (MW)', color:c.muted }
+      },
+      yDemand:{
+        position:'right',
+        ticks:{ color:c.muted },
+        grid:{ drawOnChartArea:false },
+        title:{ display:true, text:'Total Demand (MW)', color:c.muted }
+      },
+    }
+  };
+}
+
+function currentRowsForSelectedDate(){
+  return allRows.filter(r=>{
+    const d = parseCellDate(r[0]);
+    return d && isoOf(d) === selectedISO;
+  });
+}
+
+function openLiveChart(){
+  const rowsForDate = currentRowsForSelectedDate();
+  if(rowsForDate.length === 0){ alert('No data to chart for this date yet.'); return; }
+  if(typeof Chart === 'undefined'){ alert('Chart library failed to load — check your connection and try again.'); return; }
+
+  const { labels, datasets } = buildChartData(rowsForDate);
+  const ctx = document.getElementById('liveChartCanvas').getContext('2d');
+  if(liveChart) liveChart.destroy();
+  liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
+
+  document.getElementById('chartSub').textContent = selectedISO;
+  document.getElementById('chartOverlay').hidden = false;
+  chartOverlayOpen = true;
+}
+
+function closeLiveChart(){
+  document.getElementById('chartOverlay').hidden = true;
+  chartOverlayOpen = false;
+}
+
+function updateLiveChartIfOpen(rowsForDate){
+  if(!chartOverlayOpen || !liveChart) return;
+  const { labels, datasets } = buildChartData(rowsForDate);
+  liveChart.data.labels = labels;
+  datasets.forEach((ds,i)=>{
+    if(liveChart.data.datasets[i]){
+      liveChart.data.datasets[i].data = ds.data;
+    } else {
+      liveChart.data.datasets[i] = ds;
+    }
+  });
+  liveChart.data.datasets.length = datasets.length;
+  liveChart.update();
+}
+
+document.getElementById('chartCloseBtn').addEventListener('click', closeLiveChart);
+document.getElementById('chartOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'chartOverlay') closeLiveChart();
+});
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape' && chartOverlayOpen) closeLiveChart();
+});
 
 /* ---------- theme handling with a swift circular transition from the toggle ---------- */
 function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
   document.getElementById('themeToggle').setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
   try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
+  if(chartOverlayOpen && liveChart){
+    const c = chartThemeColors();
+    liveChart.options.plugins.legend.labels.color = c.text;
+    liveChart.options.plugins.tooltip.backgroundColor = c.panel;
+    liveChart.options.plugins.tooltip.titleColor = c.text;
+    liveChart.options.plugins.tooltip.bodyColor = c.text;
+    liveChart.options.plugins.tooltip.borderColor = c.border;
+    liveChart.options.scales.x.ticks.color = c.muted;
+    liveChart.options.scales.x.grid.color = c.border;
+    liveChart.options.scales.yAG.ticks.color = c.muted;
+    liveChart.options.scales.yAG.grid.color = c.border;
+    liveChart.options.scales.yAG.title.color = c.muted;
+    liveChart.options.scales.yDemand.ticks.color = c.muted;
+    liveChart.options.scales.yDemand.title.color = c.muted;
+    const demandDs = liveChart.data.datasets.find(d => d.label === 'Total Demand');
+    if(demandDs) demandDs.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+    liveChart.update();
+  }
 }
 
 function toggleTheme(){
@@ -788,11 +1042,11 @@ function toggleTheme(){
 }
 
 (function initTheme(){
+  // default is always dark unless the user has explicitly chosen light before
   let theme = 'dark';
   try{
     const saved = localStorage.getItem('rpscl-theme');
-    if(saved) theme = saved;
-    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light';
+    if(saved === 'light' || saved === 'dark') theme = saved;
   }catch(e){}
   applyTheme(theme);
 })();
@@ -804,6 +1058,7 @@ themeToggleEl.addEventListener('keydown', (e)=>{
 document.getElementById('dateInput').addEventListener('change', renderForSelectedDate);
 
 loadData();
+setInterval(() => loadData(true), 60000); // background refresh — updates rows in place, no page reload
 </script>
 </body>
 </html>
