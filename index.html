@@ -241,7 +241,10 @@
     border-color:var(--accent);
     background:var(--panel);
   }
-  button.action:active:not(:disabled) .btn-label{ animation:breathe-label 50ms ease-in-out; }
+  /* the breathe animation is triggered via JS (adds .breathing on click) rather
+     than :active, so it always plays its full 250ms-in/250ms-out course even
+     on a very quick tap — :active alone gets cancelled the instant you release */
+  button.action .btn-label.breathing{ animation:breathe-label 500ms ease-in-out; }
   @media (hover:hover) and (pointer:fine){
     button.action:hover:not(:disabled){
       transform:translateY(-2px);
@@ -264,7 +267,7 @@
   .table-panel{ position:relative; }
   .floating-copy-btn{
     position:absolute;
-    right:36px;
+    right:66px;
     bottom:36px;
     width:46px;
     height:46px;
@@ -325,10 +328,10 @@
     transition:border-color .15s ease, color .15s ease, transform .15s ease;
   }
   .date-nav button.arrow:active:not(:disabled){
-    animation:breathe-btn 50ms ease-in-out;
     border-color:var(--accent);
     color:var(--accent);
   }
+  .date-nav button.arrow.breathing{ animation:breathe-btn 500ms ease-in-out; }
   @media (hover:hover) and (pointer:fine){
     .date-nav button.arrow:hover:not(:disabled){
       border-color:var(--accent);
@@ -1365,6 +1368,27 @@ themeToggleEl.addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleTheme(); }
 });
 document.getElementById('dateInput').addEventListener('change', renderForSelectedDate);
+
+// Triggers the 250ms-in/250ms-out breathe animation from the 'click' event
+// (fires on release) rather than :active, so a fast tap still plays the
+// animation to completion instead of getting cut off the instant you let go.
+function triggerBreathe(el, cls){
+  el.classList.remove(cls);
+  void el.offsetWidth; // force reflow so it restarts cleanly on rapid re-clicks
+  el.classList.add(cls);
+  clearTimeout(el._breatheTimeout);
+  el._breatheTimeout = setTimeout(() => el.classList.remove(cls), 500);
+}
+document.addEventListener('click', (e)=>{
+  const actionBtn = e.target.closest('button.action:not(:disabled)');
+  if(actionBtn){
+    const label = actionBtn.querySelector('.btn-label');
+    if(label) triggerBreathe(label, 'breathing');
+    return;
+  }
+  const arrowBtn = e.target.closest('.date-nav button.arrow:not(:disabled)');
+  if(arrowBtn) triggerBreathe(arrowBtn, 'breathing');
+});
 
 loadData();
 setInterval(() => loadData(true), 60000); // background refresh — updates rows in place, no page reload
