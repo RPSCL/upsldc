@@ -7,30 +7,30 @@
 <style>
   html{ scroll-behavior:smooth; }
   :root{
-    /* dark navy (default) */
-    --bg:#0a1226;
-    --bg-2:#0d1730;
-    --panel:#111e3d;
-    --panel-2:#0e1a37;
-    --border:#233257;
-    --text:#e9eef9;
-    --muted:#8ea0c4;
+    /* neutral dark charcoal grey — no blue tint */
+    --bg:#19191c;
+    --bg-2:#1f1f22;
+    --panel:#242428;
+    --panel-2:#1e1e21;
+    --border:#38383e;
+    --text:#ececee;
+    --muted:#9b9ba3;
     --accent:#f0b043;
     --accent-ink:#1c1204;
-    --shadow: 0 10px 30px -12px rgba(0,0,0,.55);
+    --shadow: 0 10px 30px -12px rgba(0,0,0,.6);
   }
   html[data-theme="light"]{
-    /* light sky blue */
-    --bg:#dff1fb;
-    --bg-2:#eaf6fd;
+    /* light neutral grey */
+    --bg:#f1f2f5;
+    --bg-2:#f8f9fb;
     --panel:#ffffff;
-    --panel-2:#f4fbff;
-    --border:#c3e1f2;
-    --text:#122238;
-    --muted:#5c7794;
+    --panel-2:#f5f6f8;
+    --border:#dee1e7;
+    --text:#1b2330;
+    --muted:#66707e;
     --accent:#e2932a;
     --accent-ink:#1c1204;
-    --shadow: 0 10px 26px -14px rgba(20,60,90,.28);
+    --shadow: 0 10px 26px -14px rgba(20,30,45,.16);
   }
 
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -136,13 +136,15 @@
     flex:0 0 auto;
   }
   html[data-theme="light"] .theme-toggle{
-    background:linear-gradient(135deg,#bfe4fb,#eaf6fd);
+    background:linear-gradient(135deg,#e3e5ea,#f6f7f9);
   }
   html[data-theme="dark"] .theme-toggle{
-    background:linear-gradient(135deg,#0d1730,#1a2b52);
+    background:linear-gradient(135deg,#1f1f22,#2d2d32);
   }
-  .theme-toggle:hover{ border-color:var(--accent); }
   .theme-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  @media (hover:hover) and (pointer:fine){
+    .theme-toggle:hover{ border-color:var(--accent); }
+  }
 
   .theme-toggle .star{
     position:absolute;
@@ -234,13 +236,19 @@
     display:inline-block;
     transition:transform .15s ease;
   }
-  button.action:hover:not(:disabled){
-    transform:translateY(-2px);
+  button.action:active:not(:disabled){
     border-color:var(--accent);
-    box-shadow:var(--shadow);
+    background:var(--panel);
   }
-  button.action:hover:not(:disabled) .btn-label{ transform:scale(1.08); }
   button.action:active:not(:disabled) .btn-label{ animation:breathe-label 50ms ease-in-out; }
+  @media (hover:hover) and (pointer:fine){
+    button.action:hover:not(:disabled){
+      transform:translateY(-2px);
+      border-color:var(--accent);
+      box-shadow:var(--shadow);
+    }
+    button.action:hover:not(:disabled) .btn-label{ transform:scale(1.08); }
+  }
   button.action:disabled{
     opacity:.4;
     cursor:not-allowed;
@@ -269,12 +277,18 @@
     justify-content:center;
     transition:border-color .15s ease, color .15s ease, transform .15s ease;
   }
-  .date-nav button.arrow:hover:not(:disabled){
+  .date-nav button.arrow:active:not(:disabled){
+    animation:breathe-btn 50ms ease-in-out;
     border-color:var(--accent);
     color:var(--accent);
-    transform:translateY(-2px) scale(1.08);
   }
-  .date-nav button.arrow:active:not(:disabled){ animation:breathe-btn 50ms ease-in-out; }
+  @media (hover:hover) and (pointer:fine){
+    .date-nav button.arrow:hover:not(:disabled){
+      border-color:var(--accent);
+      color:var(--accent);
+      transform:translateY(-2px) scale(1.08);
+    }
+  }
   .date-nav button.arrow:disabled{
     opacity:.35;
     cursor:not-allowed;
@@ -287,23 +301,44 @@
     border:1px solid var(--border);
     color:var(--text);
     border-radius:999px;
-    padding:7px 14px;
+    padding:7px 38px 7px 14px;
     font-size:13px;
     font-family:inherit;
     color-scheme: dark;
+    -webkit-appearance:none;
+    appearance:none;
   }
   html[data-theme="light"] .date-nav input[type="date"]{ color-scheme: light; }
-  /* the default calendar-picker icon renders near-black — invert it so it's
-     visible on the dark navy theme, since this native picker is the phone's
-     own calendar UI and is the best option for date entry on mobile */
+  /* fully suppress the browser's own indicator (which can render as a plain
+     down-arrow rather than a calendar glyph, and inconsistently at that) —
+     keep the tap zone functional but invisible, and draw one consistent
+     calendar icon on top instead */
   .date-nav input[type="date"]::-webkit-calendar-picker-indicator{
+    position:absolute;
+    right:0; top:0;
+    width:38px; height:100%;
+    margin:0;
+    padding:0;
+    background:transparent;
+    -webkit-appearance:none;
+    appearance:none;
+    opacity:0;
     cursor:pointer;
-    filter:invert(1);
-    opacity:.75;
   }
-  html[data-theme="light"] .date-nav input[type="date"]::-webkit-calendar-picker-indicator{
-    filter:none;
-    opacity:.6;
+  .date-input-wrap{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+  }
+  .date-input-wrap .date-icon{
+    position:absolute;
+    right:13px;
+    top:50%;
+    transform:translateY(-50%);
+    width:16px;
+    height:16px;
+    color:var(--muted);
+    pointer-events:none;
   }
 
   .status{ color:var(--muted); font-size:12px; margin-top:10px; }
@@ -374,7 +409,8 @@
     .topbar{ flex-wrap:nowrap; gap:10px; margin-bottom:16px; }
     .brand{ gap:8px; flex:1 1 auto; }
     .logo-wrap svg{ width:88px; height:27px; }
-    .brand-text h1{ font-size:13.5px; }
+    .brand-text h1{ font-size:13.5px; text-align:center; }
+    .brand-text{ flex:1 1 auto; }
     .brand-text .tag{ display:none; }
     .theme-toggle{ width:52px; height:28px; }
     .theme-toggle .thumb{ width:20px; height:20px; top:3px; left:3px; }
@@ -394,7 +430,8 @@
     }
     .btn-group button.action{ flex:1 1 0; padding:10px 6px; font-size:11.5px; white-space:nowrap; text-align:center; }
     .date-nav{ width:100%; flex-wrap:nowrap; justify-content:center; }
-    .date-nav input[type="date"]{ flex:1 1 auto; padding:8px 10px; font-size:12.5px; min-height:36px; text-align:center; }
+    .date-input-wrap{ flex:1 1 auto; }
+    .date-nav input[type="date"]{ width:100%; padding:8px 34px 8px 10px; font-size:12.5px; min-height:36px; text-align:center; }
   }
 </style>
 </head>
@@ -430,7 +467,13 @@
     </div>
     <div class="date-nav">
       <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
-      <input type="date" id="dateInput" min="2026-08-23">
+      <span class="date-input-wrap">
+        <input type="date" id="dateInput" min="2026-08-23">
+        <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4.5" width="18" height="16" rx="2.5"/>
+          <path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>
+        </svg>
+      </span>
       <button class="arrow" id="nextDay" onclick="stepDate(1)" aria-label="Next day">&#8250;</button>
     </div>
   </div>
