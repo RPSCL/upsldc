@@ -42,7 +42,18 @@
       var(--bg);
     color:var(--text);
     padding:26px 28px 40px;
+    scrollbar-width:thin;
+    scrollbar-color: var(--border) transparent;
   }
+  body::-webkit-scrollbar{ width:10px; }
+  body::-webkit-scrollbar-track{ background:transparent; }
+  body::-webkit-scrollbar-thumb{
+    background:var(--border);
+    border-radius:999px;
+    border:2px solid var(--bg);
+    transition:background .2s ease;
+  }
+  body::-webkit-scrollbar-thumb:hover{ background:var(--accent); }
 
   /* disable the browser's default view-transition crossfade —
      we drive the clip-path animation ourselves */
@@ -50,6 +61,17 @@
   ::view-transition-new(root){
     animation:none;
     mix-blend-mode:normal;
+  }
+
+  @keyframes breathe-label{
+    0%{ transform:scale(1); }
+    50%{ transform:scale(.88); }
+    100%{ transform:scale(1); }
+  }
+  @keyframes breathe-btn{
+    0%{ transform:scale(1); }
+    50%{ transform:scale(.86); }
+    100%{ transform:scale(1); }
   }
 
   /* ---------- header ---------- */
@@ -65,23 +87,33 @@
     display:flex;
     align-items:center;
     gap:14px;
+    min-width:0;
   }
   .logo-wrap{
-    display:inline-block;
+    display:inline-flex;
     cursor:default;
     transition:transform .25s ease;
+    flex:0 0 auto;
   }
   .logo-wrap:hover{ transform:scale(1.09); }
+  .logo-wrap svg{ display:block; width:132px; height:40px; }
+  .brand-text{ min-width:0; }
   .brand-text h1{
     font-size:18px;
     letter-spacing:.2px;
     margin:0;
     font-weight:700;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
   .brand-text .tag{
     font-size:12px;
     color:var(--muted);
     margin-top:2px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
   }
 
   /* ---------- theme toggle: one clickable pebble switch ---------- */
@@ -96,6 +128,7 @@
     user-select:none;
     transition:background .35s ease, border-color .35s ease;
     overflow:visible;
+    flex:0 0 auto;
   }
   html[data-theme="light"] .theme-toggle{
     background:linear-gradient(135deg,#bfe4fb,#eaf6fd);
@@ -106,7 +139,6 @@
   .theme-toggle:hover{ border-color:var(--accent); }
   .theme-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
 
-  /* two faint stars, visible only in dark mode */
   .theme-toggle .star{
     position:absolute;
     width:2.5px; height:2.5px;
@@ -133,7 +165,6 @@
   html[data-theme="light"] .theme-toggle .thumb{ background:var(--accent); }
   html[data-theme="dark"] .theme-toggle .thumb{ background:#eef2f8; transform:translateX(32px); }
 
-  /* sun rays behind the thumb — light mode only */
   .theme-toggle .thumb::before{
     content:'';
     position:absolute;
@@ -150,7 +181,6 @@
     transform:scale(1);
   }
 
-  /* moon craters — dark mode only, full circular moon */
   .theme-toggle .thumb::after{
     content:'';
     position:absolute;
@@ -183,29 +213,32 @@
   }
   .btn-group{ display:flex; gap:10px; flex-wrap:wrap; }
 
+  /* ---------- buttons: neutral surface, motion-driven feedback ---------- */
   button.action{
-    background:var(--accent);
-    color:var(--accent-ink);
-    border:none;
+    background:var(--panel-2);
+    color:var(--text);
+    border:1px solid var(--border);
     padding:9px 20px;
     border-radius:999px;
     font-size:13px;
     font-weight:700;
     cursor:pointer;
-    transition:transform .15s ease, filter .15s ease, box-shadow .15s ease;
+    transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;
   }
-  button.action.secondary{
-    background:var(--panel-2);
-    color:var(--text);
-    border:1px solid var(--border);
-    font-weight:600;
+  button.action .btn-label{
+    display:inline-block;
+    transition:transform .15s ease;
   }
-  button.action:hover:not(:disabled){ filter:brightness(1.08); transform:translateY(-1px); box-shadow:var(--shadow); }
-  button.action:active:not(:disabled){ transform:translateY(0); }
+  button.action:hover:not(:disabled){
+    transform:translateY(-2px);
+    border-color:var(--accent);
+    box-shadow:var(--shadow);
+  }
+  button.action:hover:not(:disabled) .btn-label{ transform:scale(1.08); }
+  button.action:active:not(:disabled) .btn-label{ animation:breathe-label 50ms ease-in-out; }
   button.action:disabled{
     opacity:.4;
     cursor:not-allowed;
-    filter:none;
     transform:none;
     box-shadow:none;
   }
@@ -215,6 +248,7 @@
     display:flex;
     align-items:center;
     gap:8px;
+    flex:0 0 auto;
   }
   .date-nav button.arrow{
     width:34px;
@@ -230,7 +264,12 @@
     justify-content:center;
     transition:border-color .15s ease, color .15s ease, transform .15s ease;
   }
-  .date-nav button.arrow:hover:not(:disabled){ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+  .date-nav button.arrow:hover:not(:disabled){
+    border-color:var(--accent);
+    color:var(--accent);
+    transform:translateY(-2px) scale(1.08);
+  }
+  .date-nav button.arrow:active:not(:disabled){ animation:breathe-btn 50ms ease-in-out; }
   .date-nav button.arrow:disabled{
     opacity:.35;
     cursor:not-allowed;
@@ -261,7 +300,21 @@
     max-height:70vh;
     scroll-behavior:smooth;
     -webkit-overflow-scrolling:touch;
+    scrollbar-width:thin;
+    scrollbar-color: var(--border) transparent;
   }
+  .table-wrap::-webkit-scrollbar{ width:10px; height:10px; }
+  .table-wrap::-webkit-scrollbar-track{ background:transparent; }
+  .table-wrap::-webkit-scrollbar-thumb{
+    background:var(--border);
+    border-radius:999px;
+    border:2px solid var(--panel);
+    background-clip:padding-box;
+    transition:background .2s ease;
+  }
+  .table-wrap::-webkit-scrollbar-thumb:hover{ background:var(--accent); }
+  .table-wrap::-webkit-scrollbar-corner{ background:transparent; }
+
   table{ width:100%; border-collapse:collapse; font-size:12.5px; }
   th,td{
     padding:8px 11px;
@@ -297,6 +350,34 @@
     color:var(--muted);
     font-size:13px;
   }
+
+  /* ---------- mobile: single-row header, single-row controls ---------- */
+  @media (max-width:640px){
+    body{ padding:14px 12px 26px; }
+    .topbar{ flex-wrap:nowrap; gap:10px; margin-bottom:16px; }
+    .brand{ gap:8px; flex:1 1 auto; }
+    .logo-wrap svg{ width:88px; height:27px; }
+    .brand-text h1{ font-size:13.5px; }
+    .brand-text .tag{ display:none; }
+    .theme-toggle{ width:52px; height:28px; }
+    .theme-toggle .thumb{ width:20px; height:20px; top:3px; left:3px; }
+    html[data-theme="dark"] .theme-toggle .thumb{ transform:translateX(24px); }
+
+    .panel{ padding:12px; border-radius:14px; }
+    .controls-row{
+      flex-wrap:nowrap;
+      justify-content:flex-start;
+      overflow-x:auto;
+      -webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+      padding-bottom:2px;
+    }
+    .controls-row::-webkit-scrollbar{ display:none; }
+    .btn-group{ flex-wrap:nowrap; flex:0 0 auto; }
+    button.action{ padding:8px 14px; font-size:12px; white-space:nowrap; }
+    .date-nav{ flex-wrap:nowrap; }
+    .date-nav input[type="date"]{ padding:7px 10px; font-size:12px; }
+  }
 </style>
 </head>
 <body>
@@ -304,7 +385,7 @@
 <div class="topbar">
   <div class="brand">
     <span class="logo-wrap" title="RPSCL">
-      <svg width="132" height="40" viewBox="0 0 132 40" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 132 40" xmlns="http://www.w3.org/2000/svg">
         <polygon points="8,2 2,20 9,20 5,38 20,16 12,16 17,2" fill="var(--accent)"/>
         <text x="27" y="27" font-family="Segoe UI, system-ui, sans-serif" font-size="21" font-weight="800" letter-spacing="1" fill="var(--text)">RPSCL</text>
       </svg>
@@ -325,9 +406,9 @@
 <div class="panel">
   <div class="controls-row">
     <div class="btn-group">
-      <button class="action" onclick="loadData()">Refresh</button>
-      <button class="action" id="downloadBtn" onclick="downloadCSV()">Download CSV</button>
-      <button class="action secondary" onclick="createChart()">Create Chart</button>
+      <button class="action" onclick="loadData()"><span class="btn-label">Refresh</span></button>
+      <button class="action" id="downloadBtn" onclick="downloadCSV()"><span class="btn-label">Download CSV</span></button>
+      <button class="action" onclick="createChart()"><span class="btn-label">Create Chart</span></button>
     </div>
     <div class="date-nav">
       <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
@@ -427,7 +508,8 @@ async function loadData(){
     renderForSelectedDate();
     status.textContent = 'Last refreshed ' + new Date().toLocaleTimeString();
   }catch(err){
-    status.textContent = 'Could not load ' + CSV_PATH + ' yet — the first GitHub Actions run may not have completed. (' + err.message + ')';
+    // stay silent — no CSV yet is a normal, expected state, not an error to surface
+    status.textContent = '';
     document.getElementById('downloadBtn').disabled = true;
     document.getElementById('bodyRows').innerHTML = '';
     document.getElementById('headRow').innerHTML = '';
@@ -476,7 +558,7 @@ function stepDate(delta){
   renderForSelectedDate();
 }
 
-// Builds the full 01:00 -> 00:00 (24 hour) slot list for the day, chronological order.
+// Chronological 01:00 -> 00:00 (24 hour) slot list for a day.
 function fullDayHourSlots(){
   const slots = [];
   for(let h = 1; h <= 23; h++) slots.push(String(h).padStart(2,'0'));
@@ -503,6 +585,15 @@ function renderForSelectedDate(){
   const downloadBtn = document.getElementById('downloadBtn');
   const status = document.getElementById('status');
 
+  if(rowsForDate.length === 0){
+    headRow.innerHTML = '';
+    bodyRows.innerHTML = '<tr><td class="empty-state" colspan="1">No data logged for this date yet.</td></tr>';
+    downloadBtn.disabled = true;
+    currentRawCSVForDate = '';
+    status.textContent = 'No data logged for ' + selectedISO + ' yet.';
+    return;
+  }
+
   // map hour -> matching row (last one wins if duplicates)
   const byHour = {};
   rowsForDate.forEach(r=>{
@@ -519,7 +610,16 @@ function renderForSelectedDate(){
     return `<th${isRosaTotal ? ' class="rosa-total"' : ''}>${h}</th>`;
   }).join('');
 
-  const slots = fullDayHourSlots(); // chronological 01..23,00
+  // Trim to the span between the first and last hour that actually has data —
+  // no placeholder rows before the first entry or after the most recent one.
+  const allSlots = fullDayHourSlots(); // chronological 01..23,00
+  const dataIdxs = allSlots
+    .map((hr, i) => (byHour[hr] ? i : -1))
+    .filter(i => i >= 0);
+  const firstIdx = Math.min(...dataIdxs);
+  const lastIdx = Math.max(...dataIdxs);
+  const slots = allSlots.slice(firstIdx, lastIdx + 1); // smallest time first
+
   const slotRows = slots.map(hr=>{
     const raw = byHour[hr];
     if(raw) return { missing:false, cells: addRosaTotals(raw) };
@@ -528,10 +628,7 @@ function renderForSelectedDate(){
     return { missing:true, cells: blank };
   });
 
-  // newest hour first, matching the previous display convention
-  const displayOrder = slotRows.slice().reverse();
-
-  bodyRows.innerHTML = displayOrder.map(entry=>{
+  bodyRows.innerHTML = slotRows.map(entry=>{
     const rowClass = entry.missing ? ' class="missing-row"' : '';
     const tds = entry.cells.map((c,i)=>{
       const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
@@ -540,15 +637,12 @@ function renderForSelectedDate(){
     return `<tr${rowClass}>${tds}</tr>`;
   }).join('');
 
-  // CSV download uses only real fetched rows; missing hours are all-empty rows (",,,,,,,")
+  // CSV mirrors the same trimmed range; missing hours inside it are fully empty rows.
   const csvSlotRows = slots.map(hr => byHour[hr] ? byHour[hr] : new Array(rawHeader.length).fill(''));
   currentRawCSVForDate = [rawHeader.join(',')].concat(csvSlotRows.map(r=>r.join(','))).join('\n');
 
-  const haveData = rowsForDate.length > 0;
-  downloadBtn.disabled = !haveData;
-  status.textContent = haveData
-    ? 'Loaded ' + rowsForDate.length + ' logged hour(s) for ' + selectedISO + '.'
-    : 'No data logged for ' + selectedISO + ' yet.';
+  downloadBtn.disabled = false;
+  status.textContent = 'Loaded ' + rowsForDate.length + ' logged hour(s) for ' + selectedISO + '.';
 }
 
 function downloadCSV(){
@@ -598,13 +692,11 @@ function toggleTheme(){
       `circle(${endRadius}px at ${x}px ${y}px)`
     ];
     if(newTheme === 'light'){
-      // day spreads outward from the toggle
       document.documentElement.animate(
         { clipPath },
         { duration: 190, easing: 'ease-out', pseudoElement: '::view-transition-new(root)' }
       );
     } else {
-      // day collapses back into the toggle, revealing night underneath
       document.documentElement.animate(
         { clipPath: clipPath.slice().reverse() },
         { duration: 190, easing: 'ease-in', pseudoElement: '::view-transition-old(root)' }
