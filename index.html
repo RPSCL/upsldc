@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RPSCL — Hourly DC/SG Data</title>
+<title>RPSCL — U.P. Demand Supply</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 40'%3E%3Cpolygon points='8,2 2,20 9,20 5,38 20,16 12,16 17,2' fill='%23f0b043'/%3E%3C/svg%3E">
 <style>
   html{ scroll-behavior:smooth; }
   :root{
@@ -256,6 +257,24 @@
     box-shadow:none;
   }
 
+  /* copy button: soft fade between the label and a green checkmark, both
+     ways — Claude-style copy confirmation */
+  .copy-btn{ position:relative; }
+  .copy-btn .btn-check{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:#3ecf7e;
+    opacity:0;
+    transition:opacity .28s ease;
+    pointer-events:none;
+  }
+  .copy-btn .btn-label{ transition:opacity .28s ease; }
+  .copy-btn.copied .btn-label{ opacity:0; }
+  .copy-btn.copied .btn-check{ opacity:1; }
+
   /* date selector */
   .date-nav{
     display:flex;
@@ -407,7 +426,7 @@
   .chart-overlay{
     position:fixed;
     inset:0;
-    background:rgba(0,0,0,.55);
+    background:rgba(0,0,0,.5);
     display:flex;
     align-items:center;
     justify-content:center;
@@ -436,7 +455,7 @@
   .chart-panel-head h2{ margin:0; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .chart-panel-head .chart-sub{ color:var(--muted); font-size:12px; margin-top:2px; white-space:nowrap; }
   .chart-head-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
-  .chart-close, .chart-download{
+  .chart-close, .chart-download, .chart-reset{
     width:32px;
     height:32px;
     border-radius:999px;
@@ -452,10 +471,10 @@
     transition:border-color .15s ease, color .15s ease;
     padding:0;
   }
-  .chart-download svg{ width:15px; height:15px; }
-  .chart-close:active, .chart-download:active{ border-color:var(--accent); color:var(--accent); }
+  .chart-download svg, .chart-reset svg{ width:15px; height:15px; }
+  .chart-close:active, .chart-download:active, .chart-reset:active{ border-color:var(--accent); color:var(--accent); }
   @media (hover:hover) and (pointer:fine){
-    .chart-close:hover, .chart-download:hover{ border-color:var(--accent); color:var(--accent); }
+    .chart-close:hover, .chart-download:hover, .chart-reset:hover{ border-color:var(--accent); color:var(--accent); }
   }
   .chart-canvas-wrap{
     position:relative;
@@ -478,7 +497,7 @@
     }
     .chart-panel-head h2{ font-size:13px; }
     .chart-panel-head .chart-sub{ display:none; }
-    .chart-close, .chart-download{ width:30px; height:30px; }
+    .chart-close, .chart-download, .chart-reset{ width:30px; height:30px; }
     .chart-canvas-wrap{ height:auto; flex:1 1 auto; }
   }
 
@@ -508,6 +527,7 @@
       gap:8px;
     }
     .btn-group button.action{ flex:1 1 0; padding:10px 6px; font-size:11.5px; white-space:nowrap; text-align:center; }
+    .copy-btn{ display:none; } /* clipboard copy is desktop/web-view only */
     .date-nav{ width:100%; flex-wrap:nowrap; justify-content:center; }
     .date-input-wrap{ flex:1 1 auto; }
     .date-nav input[type="date"]{ width:100%; padding:8px 34px 8px 10px; font-size:12.5px; min-height:36px; text-align:center; }
@@ -525,7 +545,7 @@
       </svg>
     </span>
     <div class="brand-text">
-      <h1>Hourly DC / SG Data</h1>
+      <h1>U.P. Demand Supply</h1>
       <div class="tag">Generator declared capacity, schedule &amp; actuals</div>
     </div>
   </div>
@@ -542,6 +562,14 @@
     <div class="btn-group">
       <button class="action" onclick="loadData()"><span class="btn-label">Refresh</span></button>
       <button class="action" id="downloadBtn" onclick="downloadCSV()"><span class="btn-label">Download CSV</span></button>
+      <button class="action copy-btn" id="copyBtn" onclick="copyTableToClipboard(this)">
+        <span class="btn-label">Copy</span>
+        <span class="btn-check" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 12.5l4 4 8-9"/>
+          </svg>
+        </span>
+      </button>
       <button class="action" onclick="openLiveChart()"><span class="btn-label">Live Chart</span></button>
     </div>
     <div class="date-nav">
@@ -576,6 +604,12 @@
         <div class="chart-sub" id="chartSub"></div>
       </div>
       <div class="chart-head-actions">
+        <button class="chart-reset" id="chartResetBtn" aria-label="Reset chart selection" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+            <path d="M3 4v5h5"/>
+          </svg>
+        </button>
         <button class="chart-download" id="chartDownloadBtn" aria-label="Download chart as PNG">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3v13"/>
@@ -864,9 +898,48 @@ function downloadCSV(){
   URL.revokeObjectURL(url);
 }
 
+function buildTableClipboardText(){
+  const table = document.getElementById('dataTable');
+  const rows = Array.from(table.querySelectorAll('tr'));
+  return rows.map(tr =>
+    Array.from(tr.children).map(cell => cell.textContent.trim()).join('\t')
+  ).join('\n');
+}
+
+function showCopySuccess(btn){
+  btn.classList.add('copied');
+  clearTimeout(btn._copyTimeout);
+  btn._copyTimeout = setTimeout(() => btn.classList.remove('copied'), 1400);
+}
+
+async function copyTableToClipboard(btn){
+  const text = buildTableClipboardText();
+  if(!text.trim()){ return; }
+  try{
+    await navigator.clipboard.writeText(text);
+    showCopySuccess(btn);
+  }catch(err){
+    // fallback for browsers that block/lack the async clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try{
+      document.execCommand('copy');
+      showCopySuccess(btn);
+    }catch(e2){
+      alert('Copy failed — please select and copy the table manually.');
+    }
+    ta.remove();
+  }
+}
+
 /* ---------- live chart: all *_AG series vs time, Total Demand on its own scale ---------- */
 let liveChart = null;
 let chartOverlayOpen = false;
+let selectedLabels = new Set();
 
 function getAGSeriesMeta(){
   const metas = [];
@@ -960,6 +1033,71 @@ function chartThemeColors(){
   };
 }
 
+function hexToRgba(hex, alpha){
+  const clean = hex.replace('#','');
+  const r = parseInt(clean.substring(0,2),16);
+  const g = parseInt(clean.substring(2,4),16);
+  const b = parseInt(clean.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// remembers each dataset's true color/width/point-size so dimming can be undone exactly
+function tagOriginalStyle(ds){
+  ds._origColor = ds.borderColor;
+  ds._origBg = ds.backgroundColor;
+  ds._origPointRadius = ds.pointRadius;
+  ds._origBorderWidth = ds.borderWidth;
+}
+
+// selecting one or more lines (via canvas click or legend click) dims every
+// other line to a flat grey, in both the plot and the legend swatches
+function applySelectionStyling(){
+  if(!liveChart) return;
+  const dimColor = hexToRgba(chartThemeColors().muted, 0.3);
+  liveChart.data.datasets.forEach(ds=>{
+    const isSelected = selectedLabels.size === 0 || selectedLabels.has(ds.label);
+    if(isSelected){
+      ds.borderColor = ds._origColor;
+      ds.backgroundColor = ds._origBg;
+      ds.pointRadius = ds._origPointRadius;
+      ds.borderWidth = ds._origBorderWidth;
+    } else {
+      ds.borderColor = dimColor;
+      ds.backgroundColor = dimColor;
+      ds.pointRadius = 0;
+    }
+  });
+  liveChart.update();
+}
+
+function toggleSelection(label){
+  if(selectedLabels.has(label)) selectedLabels.delete(label);
+  else selectedLabels.add(label);
+  applySelectionStyling();
+  updateResetButtonVisibility();
+}
+
+function clearSelection(){
+  if(selectedLabels.size === 0) return;
+  selectedLabels.clear();
+  applySelectionStyling();
+  updateResetButtonVisibility();
+}
+
+function updateResetButtonVisibility(){
+  const btn = document.getElementById('chartResetBtn');
+  if(btn) btn.style.display = selectedLabels.size > 0 ? '' : 'none';
+}
+
+// programmatically dismiss the hover tooltip — used when tapping outside
+// the canvas, since a touch tap otherwise leaves it stuck on screen
+function hideChartTooltip(){
+  if(!liveChart) return;
+  liveChart.setActiveElements([]);
+  if(liveChart.tooltip) liveChart.tooltip.setActiveElements([], { x:0, y:0 });
+  liveChart.update();
+}
+
 function isPhonePortrait(){
   return window.matchMedia('(max-width: 640px)').matches;
 }
@@ -977,6 +1115,9 @@ function openLiveChart(){
   if(typeof Chart === 'undefined'){ alert('Chart library failed to load — check your connection and try again.'); return; }
 
   const { labels, datasets } = buildChartData(rowsForDate);
+  datasets.forEach(tagOriginalStyle);
+  selectedLabels = new Set(); // start each opening unfiltered
+
   const ctx = document.getElementById('liveChartCanvas').getContext('2d');
   if(liveChart) liveChart.destroy();
   liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
@@ -984,12 +1125,14 @@ function openLiveChart(){
   document.getElementById('chartSub').textContent = selectedISO;
   document.getElementById('chartOverlay').hidden = false;
   chartOverlayOpen = true;
+  updateResetButtonVisibility();
   setTimeout(() => liveChart && liveChart.resize(), 60);
 }
 
 function closeLiveChart(){
   document.getElementById('chartOverlay').hidden = true;
   chartOverlayOpen = false;
+  selectedLabels = new Set();
 }
 
 // Fills the canvas with a solid theme-matching background before Chart.js
@@ -1077,9 +1220,18 @@ function buildChartOptions(forceCompact){
     maintainAspectRatio: false,
     animation: { duration: 250 },
     interaction: { mode: 'index', intersect: false },
+    onClick(evt, elements, chart){
+      // identify the single nearest line under the click (separate from the
+      // hover tooltip's "index" mode, which matches every series at once)
+      const pts = chart.getElementsAtEventForMode(evt, 'nearest', { intersect: true }, true);
+      if(pts.length) toggleSelection(chart.data.datasets[pts[0].datasetIndex].label);
+    },
     plugins:{
       legend:{
         position:'top',
+        onClick(evt, legendItem){
+          toggleSelection(legendItem.text);
+        },
         labels:{
           color:c.text,
           boxWidth: compact ? 7 : 12,
@@ -1095,6 +1247,7 @@ function buildChartOptions(forceCompact){
         borderColor:c.border,
         borderWidth:1,
         padding:10,
+        filter:(item)=> selectedLabels.size === 0 || selectedLabels.has(item.dataset.label),
       }
     },
     scales:{
@@ -1133,20 +1286,29 @@ function updateLiveChartIfOpen(rowsForDate){
     if(liveChart.data.datasets[i]){
       liveChart.data.datasets[i].data = ds.data;
     } else {
+      tagOriginalStyle(ds);
       liveChart.data.datasets[i] = ds;
     }
   });
   liveChart.data.datasets.length = datasets.length;
-  liveChart.update();
+  applySelectionStyling(); // re-apply current selection/dimming on top of the fresh data
 }
 
 document.getElementById('chartCloseBtn').addEventListener('click', closeLiveChart);
 document.getElementById('chartDownloadBtn').addEventListener('click', downloadChartPNG);
+document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
 document.getElementById('chartOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'chartOverlay') closeLiveChart();
 });
+document.querySelector('.chart-panel').addEventListener('click', (e)=>{
+  // tapping anywhere in the panel that isn't the plot itself dismisses the
+  // hover tooltip — mainly for touch, where a tap otherwise leaves it stuck
+  if(!e.target.closest('#liveChartCanvas')) hideChartTooltip();
+});
 document.addEventListener('keydown', (e)=>{
-  if(e.key === 'Escape' && chartOverlayOpen) closeLiveChart();
+  if(e.key !== 'Escape' || !chartOverlayOpen) return;
+  if(selectedLabels.size > 0) clearSelection(); // first Esc: drop the selection
+  else closeLiveChart(); // second Esc (or first, if nothing was selected): close
 });
 
 /* ---------- theme handling with a swift circular transition from the toggle ---------- */
@@ -1157,8 +1319,11 @@ function applyTheme(theme){
   if(chartOverlayOpen && liveChart){
     liveChart.options = buildChartOptions();
     const demandDs = liveChart.data.datasets.find(d => d.label === 'Total Demand');
-    if(demandDs) demandDs.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-    liveChart.update();
+    if(demandDs){
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      demandDs._origColor = accent; // keep the "true" color in sync so selection/dimming stays correct
+    }
+    applySelectionStyling(); // also refreshes the dim color to the new theme's muted tone
   }
 }
 
