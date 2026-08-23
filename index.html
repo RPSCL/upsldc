@@ -857,7 +857,14 @@ function getTotalDemandIdx(){
   return idx;
 }
 
+function getSolarGenIdx(){
+  let idx = -1;
+  rawHeader.forEach((h,i)=>{ if(normalizeHeader(h) === 'SOLARGEN') idx = i; });
+  return idx;
+}
+
 const CHART_PALETTE = ['#ff6b6b','#4dabf7','#51cf66','#f59f00','#cc5de8','#20c997','#ff922b','#5c7cfa','#ff8fa3','#66d9e8'];
+const SOLAR_COLOR = '#ffd43b';
 
 function buildChartData(rowsForDate){
   const sorted = rowsForDate.slice().sort((a,b)=>
@@ -879,8 +886,25 @@ function buildChartData(rowsForDate){
     spanGaps: true,
   }));
 
-  const demandIdx = getTotalDemandIdx();
   const datasets = agDatasets.slice();
+
+  const solarIdx = getSolarGenIdx();
+  if(solarIdx >= 0){
+    datasets.push({
+      label: 'Solar Gen',
+      data: sorted.map(r => parseFloat(r[solarIdx])),
+      borderColor: SOLAR_COLOR,
+      backgroundColor: SOLAR_COLOR,
+      yAxisID: 'yAG',
+      tension: .25,
+      borderWidth: 2.5,
+      pointRadius: 3,
+      pointHoverRadius: 5,
+      spanGaps: true,
+    });
+  }
+
+  const demandIdx = getTotalDemandIdx();
   if(demandIdx >= 0){
     datasets.push({
       label: 'Total Demand',
