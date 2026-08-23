@@ -483,16 +483,17 @@
   .chart-overlay.force-landscape .chart-panel{
     position:fixed;
     top:0;
-    left:100%;
-    width:100vh;
-    height:100vw;
-    max-height:100vw;
+    /* width/height/left are set inline in JS with real pixel measurements —
+       100vh/100vw are unreliable on mobile (they size against the browser's
+       max viewport, not what's actually visible with the address bar shown),
+       which is what was pushing the header/buttons off-screen */
     max-width:none;
     transform-origin:left top;
     transform:rotate(90deg);
     border-radius:0;
     padding:12px 16px;
     gap:8px;
+    overflow:auto;
   }
   .chart-overlay.force-landscape .chart-panel-head h2{ font-size:12.5px; }
   .chart-overlay.force-landscape .chart-panel-head{ gap:8px; }
@@ -881,7 +882,9 @@ function downloadCSV(){
   const a = document.createElement('a');
   a.href = url;
   a.download = 'upsldc_' + selectedISO + '.csv';
+  document.body.appendChild(a);
   a.click();
+  a.remove();
   URL.revokeObjectURL(url);
 }
 
@@ -1045,7 +1048,28 @@ function currentRowsForSelectedDate(){
 
 function syncChartOrientation(){
   const overlay = document.getElementById('chartOverlay');
-  overlay.classList.toggle('force-landscape', isPhonePortrait());
+  const panel = overlay.querySelector('.chart-panel');
+  const shouldForce = isPhonePortrait();
+  overlay.classList.toggle('force-landscape', shouldForce);
+
+  if(shouldForce){
+    // real measured pixels, not vh/vw — those units are computed against the
+    // browser's maximum viewport on mobile, not what's actually visible right
+    // now (e.g. while the address bar is showing), which was the root cause
+    const vv = window.visualViewport;
+    const w = Math.round(vv ? vv.width : window.innerWidth);
+    const h = Math.round(vv ? vv.height : window.innerHeight);
+    panel.style.left = w + 'px';
+    panel.style.width = h + 'px';
+    panel.style.height = w + 'px';
+    panel.style.maxHeight = w + 'px';
+  } else {
+    panel.style.left = '';
+    panel.style.width = '';
+    panel.style.height = '';
+    panel.style.maxHeight = '';
+  }
+
   if(liveChart){
     liveChart.options = buildChartOptions(); // re-picks compact/full sizing for the new layout
     // let the rotated layout settle before asking Chart.js to measure the canvas
@@ -1075,8 +1099,60 @@ function closeLiveChart(){
   chartOverlayOpen = false;
 }
 
+// Always exports in the desktop-style layout (full legend/axis titles, larger
+// fonts) regardless of the device it's downloaded from — renders a separate
+// offscreen chart so the on-screen (possibly compact/rotated) view is untouched.
+function triggerDownload(dataUrl){
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = 'rpscl-live-chart-' + selectedISO + '.png';
+  document.body.appendChild(a); // some browsers ignore a synthetic click on a detached element
+  a.click();
+  a.remove();
+}
+
+function downloadChartPNG(){
+  if(!liveChart) return;
+  try{
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 1400;
+    tempCanvas.height = 700;
+    // must be attached (off-screen) for Chart.js to size/render it reliably
+    tempCanvas.style.position = 'fixed';
+    tempCanvas.style.left = '-99999px';
+    tempCanvas.style.top = '0';
+    document.body.appendChild(tempCanvas);
+
+    const desktopOptions = buildChartOptions(false);
+    desktopOptions.responsive = false;
+    desktopOptions.maintainAspectRatio = false;
+    desktopOptions.animation = false;
+
+    const tempChart = new Chart(tempCanvas.getContext('2d'), {
+      type:'line',
+      data: JSON.parse(JSON.stringify(liveChart.data)),
+      options: desktopOptions
+    });
+
+    requestAnimationFrame(() => {
+      try{
+        triggerDownload(tempChart.toBase64Image('image/png', 1));
+      } finally {
+        tempChart.destroy();
+        tempCanvas.remove();
+      }
+    });
+  }catch(err){
+    // fall back to exporting exactly what's currently on screen
+    triggerDownload(liveChart.toBase64Image('image/png', 1));
+  }
+}
+
 window.addEventListener('resize', () => { if(chartOverlayOpen) syncChartOrientation(); });
 window.addEventListener('orientationchange', () => { if(chartOverlayOpen) syncChartOrientation(); });
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', () => { if(chartOverlayOpen) syncChartOrientation(); });
+}
 
 function updateLiveChartIfOpen(rowsForDate){
   if(!chartOverlayOpen || !liveChart) return;
@@ -1094,6 +1170,7 @@ function updateLiveChartIfOpen(rowsForDate){
 }
 
 document.getElementById('chartCloseBtn').addEventListener('click', closeLiveChart);
+document.getElementById('chartDownloadBtn').addEventListener('click', downloadChartPNG);
 document.getElementById('chartOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'chartOverlay') closeLiveChart();
 });
