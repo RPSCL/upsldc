@@ -335,7 +335,7 @@ def round_to_nearest_10_minutes(dt):
     """
 
     discard = timedelta(
-        minutes=dt.minute % 10,
+        minutes=dt.minute % 15,
         seconds=dt.second,
         microseconds=dt.microsecond
     )
@@ -343,8 +343,8 @@ def round_to_nearest_10_minutes(dt):
     rounded = dt - discard
 
     # If remainder is 5 minutes or more, round upward
-    if dt.minute % 10 >= 5:
-        rounded += timedelta(minutes=10)
+    if dt.minute % 15 >= 8:
+        rounded += timedelta(minutes=15)
 
     return rounded
 
