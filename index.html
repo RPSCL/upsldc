@@ -433,9 +433,10 @@
     justify-content:space-between;
     gap:12px;
   }
-  .chart-panel-head h2{ margin:0; font-size:16px; }
-  .chart-panel-head .chart-sub{ color:var(--muted); font-size:12px; margin-top:2px; }
-  .chart-close{
+  .chart-panel-head h2{ margin:0; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .chart-panel-head .chart-sub{ color:var(--muted); font-size:12px; margin-top:2px; white-space:nowrap; }
+  .chart-head-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
+  .chart-close, .chart-download{
     width:32px;
     height:32px;
     border-radius:999px;
@@ -449,10 +450,12 @@
     justify-content:center;
     flex:0 0 auto;
     transition:border-color .15s ease, color .15s ease;
+    padding:0;
   }
-  .chart-close:active{ border-color:var(--accent); color:var(--accent); }
+  .chart-download svg{ width:15px; height:15px; }
+  .chart-close:active, .chart-download:active{ border-color:var(--accent); color:var(--accent); }
   @media (hover:hover) and (pointer:fine){
-    .chart-close:hover{ border-color:var(--accent); color:var(--accent); }
+    .chart-close:hover, .chart-download:hover{ border-color:var(--accent); color:var(--accent); }
   }
   .chart-canvas-wrap{
     position:relative;
@@ -464,6 +467,42 @@
     .chart-overlay{ padding:10px; }
     .chart-panel{ padding:14px; border-radius:14px; }
     .chart-canvas-wrap{ height:52vh; }
+  }
+
+  /* force-landscape: on a phone held in portrait, rotate the chart panel
+     90deg and swap its dimensions so it fills the screen like landscape
+     mode — no physical rotation or OS permission needed. If the phone is
+     actually turned sideways this class isn't applied (see JS), so a real
+     landscape orientation is left completely alone. */
+  .chart-overlay.force-landscape{
+    align-items:flex-start;
+    justify-content:flex-start;
+    padding:0;
+    background:rgba(0,0,0,.75);
+  }
+  .chart-overlay.force-landscape .chart-panel{
+    position:fixed;
+    top:0;
+    left:100%;
+    width:100vh;
+    height:100vw;
+    max-height:100vw;
+    max-width:none;
+    transform-origin:left top;
+    transform:rotate(90deg);
+    border-radius:0;
+    padding:12px 16px;
+    gap:8px;
+  }
+  .chart-overlay.force-landscape .chart-panel-head h2{ font-size:12.5px; }
+  .chart-overlay.force-landscape .chart-panel-head{ gap:8px; }
+  .chart-overlay.force-landscape .chart-panel-head .chart-sub{ display:none; }
+  .chart-overlay.force-landscape .chart-close,
+  .chart-overlay.force-landscape .chart-download{ width:26px; height:26px; font-size:13px; }
+  .chart-overlay.force-landscape .chart-download svg{ width:12px; height:12px; }
+  .chart-overlay.force-landscape .chart-canvas-wrap{
+    height:auto;
+    flex:1 1 auto;
   }
 
   /* ---------- mobile: single-row header, single-row controls ---------- */
@@ -559,7 +598,16 @@
         <h2>Live Chart — Actual Generation</h2>
         <div class="chart-sub" id="chartSub"></div>
       </div>
-      <button class="chart-close" id="chartCloseBtn" aria-label="Close chart">&#10005;</button>
+      <div class="chart-head-actions">
+        <button class="chart-download" id="chartDownloadBtn" aria-label="Download chart as PNG">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v13"/>
+            <path d="M7 11l5 5 5-5"/>
+            <path d="M4 20h16"/>
+          </svg>
+        </button>
+        <button class="chart-close" id="chartCloseBtn" aria-label="Close chart">&#10005;</button>
+      </div>
     </div>
     <div class="chart-canvas-wrap">
       <canvas id="liveChartCanvas"></canvas>
@@ -933,7 +981,14 @@ function chartThemeColors(){
   };
 }
 
-function buildChartOptions(){
+function isPhonePortrait(){
+  return window.matchMedia('(max-width: 900px)').matches && window.innerHeight > window.innerWidth;
+}
+
+// forceCompact: pass true/false to override device detection (used for PNG export,
+// which always renders desktop-style regardless of the device it's downloaded from).
+function buildChartOptions(forceCompact){
+  const compact = (typeof forceCompact === 'boolean') ? forceCompact : isPhonePortrait();
   const c = chartThemeColors();
   return {
     responsive: true,
@@ -941,7 +996,16 @@ function buildChartOptions(){
     animation: { duration: 250 },
     interaction: { mode: 'index', intersect: false },
     plugins:{
-      legend:{ labels:{ color:c.text, boxWidth:12, usePointStyle:true, font:{ size:11 } } },
+      legend:{
+        position:'top',
+        labels:{
+          color:c.text,
+          boxWidth: compact ? 7 : 12,
+          padding: compact ? 6 : 10,
+          usePointStyle:true,
+          font:{ size: compact ? 9 : 11 }
+        }
+      },
       tooltip:{
         backgroundColor:c.panel,
         titleColor:c.text,
@@ -952,18 +1016,21 @@ function buildChartOptions(){
       }
     },
     scales:{
-      x:{ ticks:{ color:c.muted, maxRotation:0, autoSkip:true }, grid:{ color:c.border } },
+      x:{
+        ticks:{ color:c.muted, maxRotation:0, autoSkip:true, font:{ size: compact ? 9 : 11 } },
+        grid:{ color:c.border }
+      },
       yAG:{
         position:'left',
-        ticks:{ color:c.muted },
+        ticks:{ color:c.muted, font:{ size: compact ? 9 : 11 } },
         grid:{ color:c.border },
-        title:{ display:true, text:'Actual Generation (MW)', color:c.muted }
+        title:{ display: !compact, text:'Actual Generation (MW)', color:c.muted }
       },
       yDemand:{
         position:'right',
-        ticks:{ color:c.muted },
+        ticks:{ color:c.muted, font:{ size: compact ? 9 : 11 } },
         grid:{ drawOnChartArea:false },
-        title:{ display:true, text:'Total Demand (MW)', color:c.muted }
+        title:{ display: !compact, text:'Total Demand (MW)', color:c.muted }
       },
     }
   };
@@ -974,6 +1041,16 @@ function currentRowsForSelectedDate(){
     const d = parseCellDate(r[0]);
     return d && isoOf(d) === selectedISO;
   });
+}
+
+function syncChartOrientation(){
+  const overlay = document.getElementById('chartOverlay');
+  overlay.classList.toggle('force-landscape', isPhonePortrait());
+  if(liveChart){
+    liveChart.options = buildChartOptions(); // re-picks compact/full sizing for the new layout
+    // let the rotated layout settle before asking Chart.js to measure the canvas
+    setTimeout(() => liveChart && liveChart.resize(), 60);
+  }
 }
 
 function openLiveChart(){
@@ -989,12 +1066,17 @@ function openLiveChart(){
   document.getElementById('chartSub').textContent = selectedISO;
   document.getElementById('chartOverlay').hidden = false;
   chartOverlayOpen = true;
+  syncChartOrientation(); // rotate into landscape immediately if this is a phone in portrait
 }
 
 function closeLiveChart(){
   document.getElementById('chartOverlay').hidden = true;
+  document.getElementById('chartOverlay').classList.remove('force-landscape');
   chartOverlayOpen = false;
 }
+
+window.addEventListener('resize', () => { if(chartOverlayOpen) syncChartOrientation(); });
+window.addEventListener('orientationchange', () => { if(chartOverlayOpen) syncChartOrientation(); });
 
 function updateLiveChartIfOpen(rowsForDate){
   if(!chartOverlayOpen || !liveChart) return;
@@ -1025,19 +1107,7 @@ function applyTheme(theme){
   document.getElementById('themeToggle').setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
   try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
   if(chartOverlayOpen && liveChart){
-    const c = chartThemeColors();
-    liveChart.options.plugins.legend.labels.color = c.text;
-    liveChart.options.plugins.tooltip.backgroundColor = c.panel;
-    liveChart.options.plugins.tooltip.titleColor = c.text;
-    liveChart.options.plugins.tooltip.bodyColor = c.text;
-    liveChart.options.plugins.tooltip.borderColor = c.border;
-    liveChart.options.scales.x.ticks.color = c.muted;
-    liveChart.options.scales.x.grid.color = c.border;
-    liveChart.options.scales.yAG.ticks.color = c.muted;
-    liveChart.options.scales.yAG.grid.color = c.border;
-    liveChart.options.scales.yAG.title.color = c.muted;
-    liveChart.options.scales.yDemand.ticks.color = c.muted;
-    liveChart.options.scales.yDemand.title.color = c.muted;
+    liveChart.options = buildChartOptions();
     const demandDs = liveChart.data.datasets.find(d => d.label === 'Total Demand');
     if(demandDs) demandDs.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
     liveChart.update();
