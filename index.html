@@ -2,59 +2,223 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>UPSLDC Hourly Data</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RPSCL — Hourly DC/SG Data</title>
 <style>
   :root{
-    --bg:#0f1720;
-    --panel:#16202b;
-    --border:#26333f;
-    --text:#e6edf3;
-    --muted:#8ba0b3;
-    --accent:#4fb3a9;
+    /* dark navy (default) */
+    --bg:#0a1226;
+    --bg-2:#0d1730;
+    --panel:#111e3d;
+    --panel-2:#0e1a37;
+    --border:#233257;
+    --text:#e9eef9;
+    --muted:#8ea0c4;
+    --accent:#f0b043;
+    --accent-ink:#1c1204;
+    --shadow: 0 10px 30px -12px rgba(0,0,0,.55);
   }
+  html[data-theme="light"]{
+    /* light sky blue */
+    --bg:#dff1fb;
+    --bg-2:#eaf6fd;
+    --panel:#ffffff;
+    --panel-2:#f4fbff;
+    --border:#c3e1f2;
+    --text:#122238;
+    --muted:#5c7794;
+    --accent:#e2932a;
+    --accent-ink:#1c1204;
+    --shadow: 0 10px 26px -14px rgba(20,60,90,.28);
+  }
+
   *{box-sizing:border-box;}
   body{
     margin:0;
     font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
-    background:var(--bg);
+    background:
+      radial-gradient(1100px 500px at 90% -10%, var(--bg-2), transparent),
+      var(--bg);
     color:var(--text);
-    padding:24px;
+    padding:26px 28px 40px;
+    transition:background .25s ease, color .25s ease;
   }
-  h1{ font-size:20px; margin:0 0 4px 0; }
-  .sub{ color:var(--muted); font-size:13px; margin-bottom:20px; }
+
+  /* ---------- header ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    margin-bottom:22px;
+    flex-wrap:wrap;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .logo-wrap{
+    display:inline-block;
+    cursor:default;
+    transition:transform .25s ease;
+  }
+  .logo-wrap:hover{ transform:scale(1.09); }
+  .brand-text h1{
+    font-size:18px;
+    letter-spacing:.2px;
+    margin:0;
+    font-weight:700;
+  }
+  .brand-text .tag{
+    font-size:12px;
+    color:var(--muted);
+    margin-top:2px;
+  }
+
+  /* theme toggle — one clickable pebble-shaped switch */
+  .theme-toggle{
+    position:relative;
+    width:68px;
+    height:36px;
+    border-radius:999px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    box-shadow:var(--shadow);
+    cursor:pointer;
+    padding:0;
+    user-select:none;
+  }
+  .theme-toggle .icon{
+    position:absolute;
+    top:50%;
+    transform:translateY(-50%);
+    width:16px;
+    height:16px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--muted);
+    transition:color .25s ease;
+    pointer-events:none;
+  }
+  .theme-toggle .icon svg{ width:100%; height:100%; }
+  .theme-toggle .icon.sun{ left:10px; }
+  .theme-toggle .icon.moon{ right:10px; }
+  .theme-toggle .thumb{
+    position:absolute;
+    top:3px;
+    left:3px;
+    width:28px;
+    height:28px;
+    border-radius:50%;
+    background:var(--accent);
+    box-shadow:0 3px 8px rgba(0,0,0,.3);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+  }
+  html[data-theme="dark"] .theme-toggle .thumb{ transform:translateX(32px); }
+  html[data-theme="dark"] .theme-toggle .icon.moon{ color:var(--accent-ink); }
+  html[data-theme="light"] .theme-toggle .icon.sun{ color:var(--accent-ink); }
+  .theme-toggle:hover{ border-color:var(--accent); }
+  .theme-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* ---------- panels ---------- */
   .panel{
     background:var(--panel);
     border:1px solid var(--border);
-    border-radius:10px;
+    border-radius:16px;
     padding:16px;
-    margin-bottom:20px;
+    margin-bottom:18px;
+    box-shadow:var(--shadow);
   }
-  button{
+  .controls-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:14px;
+  }
+  .btn-group{ display:flex; gap:10px; flex-wrap:wrap; }
+
+  button.action{
     background:var(--accent);
-    color:#06231f;
+    color:var(--accent-ink);
     border:none;
-    padding:9px 16px;
-    border-radius:6px;
+    padding:9px 20px;
+    border-radius:999px;
     font-size:13px;
-    font-weight:600;
+    font-weight:700;
     cursor:pointer;
-    margin-right:10px;
+    transition:transform .15s ease, filter .15s ease, box-shadow .15s ease;
   }
-  button.secondary{
-    background:transparent;
+  button.action.secondary{
+    background:var(--panel-2);
     color:var(--text);
     border:1px solid var(--border);
+    font-weight:600;
   }
-  button:hover{ filter:brightness(1.08); }
+  button.action:hover{ filter:brightness(1.08); transform:translateY(-1px); box-shadow:var(--shadow); }
+  button.action:active{ transform:translateY(0); }
+  button.action:disabled{
+    opacity:.4;
+    cursor:not-allowed;
+    filter:none;
+    transform:none;
+    box-shadow:none;
+  }
+
+  /* date selector */
+  .date-nav{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .date-nav button.arrow{
+    width:34px;
+    height:34px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--text);
+    font-size:15px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    transition:border-color .15s ease, color .15s ease, transform .15s ease;
+  }
+  .date-nav button.arrow:hover:not(:disabled){ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+  .date-nav button.arrow:disabled{
+    opacity:.35;
+    cursor:not-allowed;
+    border-color:var(--border);
+    color:var(--muted);
+    transform:none;
+  }
+  .date-nav input[type="date"]{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    color:var(--text);
+    border-radius:999px;
+    padding:7px 14px;
+    font-size:13px;
+    font-family:inherit;
+    color-scheme: dark;
+  }
+  html[data-theme="light"] .date-nav input[type="date"]{ color-scheme: light; }
+
+  .status{ color:var(--muted); font-size:12px; margin-top:10px; }
+
+  /* ---------- table ---------- */
   .table-wrap{
     overflow-x:auto;
     border:1px solid var(--border);
-    border-radius:8px;
+    border-radius:12px;
     max-height:70vh;
   }
   table{ width:100%; border-collapse:collapse; font-size:12.5px; }
   th,td{
-    padding:7px 10px;
+    padding:8px 11px;
     text-align:right;
     border-bottom:1px solid var(--border);
     white-space:nowrap;
@@ -64,25 +228,67 @@
   }
   th{
     color:var(--muted);
-    font-weight:600;
+    font-weight:700;
     font-size:10.5px;
     text-transform:uppercase;
+    letter-spacing:.03em;
     position:sticky;
     top:0;
     background:var(--panel);
   }
-  .status{ color:var(--muted); font-size:12px; margin-top:8px; }
+  tbody tr:hover td{ background:var(--panel-2); }
+  td.rosa-total, th.rosa-total{
+    color:var(--accent);
+    font-weight:700;
+  }
+  .empty-state{
+    padding:34px 16px;
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+  }
 </style>
 </head>
 <body>
 
-<h1>UPSLDC Hourly Data</h1>
-<div class="sub">Updated hourly by a GitHub Actions workflow — see .github/workflows/update-data.yml in this repo.</div>
+<div class="topbar">
+  <div class="brand">
+    <span class="logo-wrap" title="RPSCL">
+      <svg width="132" height="40" viewBox="0 0 132 40" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="8,2 2,20 9,20 5,38 20,16 12,16 17,2" fill="var(--accent)"/>
+        <text x="27" y="27" font-family="Segoe UI, system-ui, sans-serif" font-size="21" font-weight="800" letter-spacing="1" fill="var(--text)">RPSCL</text>
+      </svg>
+    </span>
+    <div class="brand-text">
+      <h1>Hourly DC / SG Data</h1>
+      <div class="tag">Generator declared capacity, schedule &amp; actuals</div>
+    </div>
+  </div>
+
+  <div class="theme-toggle" id="themeToggle" role="switch" aria-checked="false" aria-label="Toggle dark mode" tabindex="0">
+    <span class="icon sun">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
+    </span>
+    <span class="icon moon">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 14.9A9 9 0 1 1 9.1 3.3a7 7 0 0 0 11.6 11.6z"/></svg>
+    </span>
+    <span class="thumb"></span>
+  </div>
+</div>
 
 <div class="panel">
-  <button onclick="loadData()">Refresh</button>
-  <button onclick="downloadCSV()">Download CSV</button>
-  <button class="secondary" onclick="createChart()">Create Chart</button>
+  <div class="controls-row">
+    <div class="btn-group">
+      <button class="action" onclick="loadData()">Refresh</button>
+      <button class="action" id="downloadBtn" onclick="downloadCSV()">Download CSV</button>
+      <button class="action secondary" onclick="createChart()">Create Chart</button>
+    </div>
+    <div class="date-nav">
+      <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
+      <input type="date" id="dateInput" min="2026-08-23">
+      <button class="arrow" id="nextDay" onclick="stepDate(1)" aria-label="Next day">&#8250;</button>
+    </div>
+  </div>
   <div class="status" id="status">Loading...</div>
 </div>
 
@@ -97,10 +303,50 @@
 
 <script>
 const CSV_PATH = 'upsldc_hourly_data.csv';
-let rawCSVText = '';
+const MIN_DATE = new Date(2026, 7, 23); // 23-Aug-2026, months are 0-indexed
+function today(){ const t = new Date(); t.setHours(0,0,0,0); return t; }
+
+let allRows = [];      // array of row arrays (excluding header)
+let rawHeader = [];    // original header cells
+let displayHeader = []; // formatted header cells, with Rosa Total columns inserted
+let rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
+let insertAfterIdx = -1;
+let currentRawCSVForDate = ''; // csv text for the currently selected date, for download
+let selectedISO = '';
 
 function parseCSV(text){
   return text.trim().split('\n').map(line => line.split(','));
+}
+
+function normalizeHeader(h){
+  return h.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+
+function formatHeaderLabel(h){
+  const words = h.trim().replace(/_/g,' ').split(/\s+/);
+  return words.map(w=>{
+    const up = w.toUpperCase();
+    if(up === 'DC' || up === 'SG' || up === 'AG') return up;
+    if(/^\d+$/.test(w)) return w;
+    return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+  }).join(' ');
+}
+
+// Parses a CSV-style date cell like "23-Aug-2026" into a Date object.
+function parseCellDate(cell){
+  const months = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  const m = cell.trim().match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if(!m) return null;
+  const mon = months[m[2].toLowerCase()];
+  if(mon === undefined) return null;
+  return new Date(parseInt(m[3],10), mon, parseInt(m[1],10));
+}
+
+function isoOf(d){
+  const y = d.getFullYear();
+  const mo = String(d.getMonth()+1).padStart(2,'0');
+  const da = String(d.getDate()).padStart(2,'0');
+  return `${y}-${mo}-${da}`;
 }
 
 async function loadData(){
@@ -108,44 +354,173 @@ async function loadData(){
   try{
     const res = await fetch(CSV_PATH + '?t=' + Date.now());
     if(!res.ok) throw new Error('HTTP ' + res.status);
-    rawCSVText = await res.text();
-    const rows = parseCSV(rawCSVText);
-    renderTable(rows);
-    status.textContent = 'Loaded ' + (rows.length - 1) + ' rows. Last refreshed ' + new Date().toLocaleTimeString();
+    const text = await res.text();
+    const rows = parseCSV(text);
+    rawHeader = rows[0] || [];
+    allRows = rows.slice(1).filter(r => r.length === rawHeader.length);
+
+    buildHeaderPlan();
+
+    // default to the most recent date present in the data, else today (clamped to min/max)
+    let defaultDate = MIN_DATE;
+    let latest = null;
+    for(const r of allRows){
+      const d = parseCellDate(r[0]);
+      if(d && (!latest || d > latest)) latest = d;
+    }
+    if(latest) defaultDate = latest;
+    if(defaultDate < MIN_DATE) defaultDate = MIN_DATE;
+    if(defaultDate > today()) defaultDate = today();
+
+    const dateInput = document.getElementById('dateInput');
+    dateInput.max = isoOf(today());
+    if(!dateInput.value){
+      dateInput.value = isoOf(defaultDate);
+    }
+    renderForSelectedDate();
+    status.textContent = 'Last refreshed ' + new Date().toLocaleTimeString();
   }catch(err){
     status.textContent = 'Could not load ' + CSV_PATH + ' yet — the first GitHub Actions run may not have completed. (' + err.message + ')';
+    document.getElementById('downloadBtn').style.display = 'none';
+    document.getElementById('bodyRows').innerHTML = '';
+    document.getElementById('headRow').innerHTML = '';
   }
 }
 
-function renderTable(rows){
-  if(!rows.length) return;
-  const [header, ...body] = rows;
+function buildHeaderPlan(){
+  displayHeader = rawHeader.map(formatHeaderLabel);
+  rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
+  insertAfterIdx = -1;
+
+  rawHeader.forEach((h, i)=>{
+    const n = normalizeHeader(h);
+    if(n === 'ROSA1DC') rosaColIdx.dc[0] = i;
+    if(n === 'ROSA2DC') rosaColIdx.dc[1] = i;
+    if(n === 'ROSA1SG') rosaColIdx.sg[0] = i;
+    if(n === 'ROSA2SG') rosaColIdx.sg[1] = i;
+    if(n === 'ROSA1AG') rosaColIdx.ag[0] = i;
+    if(n === 'ROSA2AG') rosaColIdx.ag[1] = i;
+    if(n === 'ROSA2AG') insertAfterIdx = i;
+  });
+}
+
+function addRosaTotals(row){
+  if(insertAfterIdx === -1) return row.slice();
+  const out = row.slice(0, insertAfterIdx + 1);
+  const totals = ['dc','sg','ag'].map(key=>{
+    const [i1, i2] = rosaColIdx[key];
+    if(i1 === -1 || i2 === -1) return '';
+    const a = parseFloat(row[i1]);
+    const b = parseFloat(row[i2]);
+    if(isNaN(a) || isNaN(b)) return '';
+    return String(a + b);
+  });
+  return out.concat(totals, row.slice(insertAfterIdx + 1));
+}
+
+function stepDate(delta){
+  const input = document.getElementById('dateInput');
+  const cur = input.valueAsDate || MIN_DATE;
+  const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + delta);
+  if(next < MIN_DATE || next > today()) return;
+  input.value = isoOf(next);
+  renderForSelectedDate();
+}
+
+function renderForSelectedDate(){
+  const input = document.getElementById('dateInput');
+  const sel = input.valueAsDate;
+  if(!sel) return;
+  selectedISO = isoOf(sel);
+
+  document.getElementById('prevDay').disabled = (selectedISO <= isoOf(MIN_DATE));
+  document.getElementById('nextDay').disabled = (selectedISO >= isoOf(today()));
+
+  const rowsForDate = allRows.filter(r=>{
+    const d = parseCellDate(r[0]);
+    return d && isoOf(d) === selectedISO;
+  });
+
   const headRow = document.getElementById('headRow');
   const bodyRows = document.getElementById('bodyRows');
-  headRow.innerHTML = header.map(h => `<th>${h}</th>`).join('');
-  bodyRows.innerHTML = body.slice().reverse().map(r =>
-    '<tr>' + r.map(c => `<td>${c}</td>`).join('') + '</tr>'
+  const downloadBtn = document.getElementById('downloadBtn');
+  const status = document.getElementById('status');
+
+  if(rowsForDate.length === 0){
+    headRow.innerHTML = '';
+    bodyRows.innerHTML = '<tr><td class="empty-state" colspan="1">No data logged for this date yet.</td></tr>';
+    downloadBtn.style.display = 'none';
+    currentRawCSVForDate = '';
+    status.textContent = 'No rows for ' + selectedISO + '.';
+    return;
+  }
+
+  downloadBtn.style.display = '';
+
+  const fullHeader = insertAfterIdx === -1
+    ? displayHeader
+    : displayHeader.slice(0, insertAfterIdx + 1).concat(['Rosa Total DC','Rosa Total SG','Rosa Total AG'], displayHeader.slice(insertAfterIdx + 1));
+
+  headRow.innerHTML = fullHeader.map((h,i)=>{
+    const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
+    return `<th${isRosaTotal ? ' class="rosa-total"' : ''}>${h}</th>`;
+  }).join('');
+
+  const expandedRows = rowsForDate.map(addRosaTotals);
+
+  bodyRows.innerHTML = expandedRows.slice().reverse().map(r =>
+    '<tr>' + r.map((c,i)=>{
+      const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
+      return `<td${isRosaTotal ? ' class="rosa-total"' : ''}>${c}</td>`;
+    }).join('') + '</tr>'
   ).join('');
+
+  currentRawCSVForDate = [rawHeader.join(',')].concat(rowsForDate.map(r=>r.join(','))).join('\n');
+  status.textContent = 'Loaded ' + rowsForDate.length + ' row(s) for ' + selectedISO + '.';
 }
 
 function downloadCSV(){
-  if(!rawCSVText){ alert('No data loaded yet.'); return; }
-  const blob = new Blob([rawCSVText], {type:'text/csv'});
+  if(!currentRawCSVForDate){ alert('No data loaded yet.'); return; }
+  const blob = new Blob([currentRawCSVForDate], {type:'text/csv'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = 'upsldc_hourly_data.csv';
+  a.download = 'upsldc_' + selectedISO + '.csv';
   a.click();
   URL.revokeObjectURL(url);
 }
 
 function createChart(){
-  // Placeholder -- tell me what you want charted and I'll wire this up.
-  alert('Chart coming soon — let me know what you want plotted here.');
+  alert('Chart not yet configured.');
 }
+
+/* ---------- theme handling ---------- */
+function setTheme(theme){
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeToggle').setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
+  try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
+}
+function toggleTheme(){
+  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
+  setTheme(cur === 'dark' ? 'light' : 'dark');
+}
+(function initTheme(){
+  let theme = 'dark';
+  try{
+    const saved = localStorage.getItem('rpscl-theme');
+    if(saved) theme = saved;
+    else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light';
+  }catch(e){}
+  setTheme(theme);
+})();
+const themeToggleEl = document.getElementById('themeToggle');
+themeToggleEl.addEventListener('click', toggleTheme);
+themeToggleEl.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleTheme(); }
+});
+document.getElementById('dateInput').addEventListener('change', renderForSelectedDate);
 
 loadData();
 </script>
-
 </body>
 </html>
