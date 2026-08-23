@@ -1,6 +1,8 @@
 @echo off
 cd /d D:\Git\upsldc
 
+python fetch_upsldc.py
+
 git add .
 
 git diff --cached --quiet
