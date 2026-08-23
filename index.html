@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RPSCL — Hourly DC/SG Data</title>
 <style>
+  html{ scroll-behavior:smooth; }
   :root{
     /* dark navy (default) */
     --bg:#0a1226;
@@ -41,7 +42,14 @@
       var(--bg);
     color:var(--text);
     padding:26px 28px 40px;
-    transition:background .25s ease, color .25s ease;
+  }
+
+  /* disable the browser's default view-transition crossfade —
+     we drive the clip-path animation ourselves */
+  ::view-transition-old(root),
+  ::view-transition-new(root){
+    animation:none;
+    mix-blend-mode:normal;
   }
 
   /* ---------- header ---------- */
@@ -76,35 +84,41 @@
     margin-top:2px;
   }
 
-  /* theme toggle — one clickable pebble-shaped switch */
+  /* ---------- theme toggle: one clickable pebble switch ---------- */
   .theme-toggle{
     position:relative;
     width:68px;
     height:36px;
     border-radius:999px;
-    background:var(--panel);
     border:1px solid var(--border);
     box-shadow:var(--shadow);
     cursor:pointer;
-    padding:0;
     user-select:none;
+    transition:background .35s ease, border-color .35s ease;
+    overflow:visible;
   }
-  .theme-toggle .icon{
+  html[data-theme="light"] .theme-toggle{
+    background:linear-gradient(135deg,#bfe4fb,#eaf6fd);
+  }
+  html[data-theme="dark"] .theme-toggle{
+    background:linear-gradient(135deg,#0d1730,#1a2b52);
+  }
+  .theme-toggle:hover{ border-color:var(--accent); }
+  .theme-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* two faint stars, visible only in dark mode */
+  .theme-toggle .star{
     position:absolute;
-    top:50%;
-    transform:translateY(-50%);
-    width:16px;
-    height:16px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    color:var(--muted);
-    transition:color .25s ease;
-    pointer-events:none;
+    width:2.5px; height:2.5px;
+    border-radius:50%;
+    background:#fff;
+    opacity:0;
+    transition:opacity .3s ease;
   }
-  .theme-toggle .icon svg{ width:100%; height:100%; }
-  .theme-toggle .icon.sun{ left:10px; }
-  .theme-toggle .icon.moon{ right:10px; }
+  .theme-toggle .star.s1{ top:9px; left:14px; }
+  .theme-toggle .star.s2{ top:20px; left:20px; }
+  html[data-theme="dark"] .theme-toggle .star{ opacity:.85; }
+
   .theme-toggle .thumb{
     position:absolute;
     top:3px;
@@ -112,15 +126,44 @@
     width:28px;
     height:28px;
     border-radius:50%;
-    background:var(--accent);
     box-shadow:0 3px 8px rgba(0,0,0,.3);
-    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    transition:transform .28s cubic-bezier(.4,0,.2,1), background .3s ease;
+    z-index:2;
   }
-  html[data-theme="dark"] .theme-toggle .thumb{ transform:translateX(32px); }
-  html[data-theme="dark"] .theme-toggle .icon.moon{ color:var(--accent-ink); }
-  html[data-theme="light"] .theme-toggle .icon.sun{ color:var(--accent-ink); }
-  .theme-toggle:hover{ border-color:var(--accent); }
-  .theme-toggle:focus-visible{ outline:2px solid var(--accent); outline-offset:2px; }
+  html[data-theme="light"] .theme-toggle .thumb{ background:var(--accent); }
+  html[data-theme="dark"] .theme-toggle .thumb{ background:#eef2f8; transform:translateX(32px); }
+
+  /* sun rays behind the thumb — light mode only */
+  .theme-toggle .thumb::before{
+    content:'';
+    position:absolute;
+    inset:-7px;
+    border-radius:50%;
+    background:repeating-conic-gradient(var(--accent) 0deg 4deg, transparent 4deg 45deg);
+    opacity:0;
+    transform:scale(.55);
+    transition:opacity .25s ease, transform .25s ease;
+    z-index:-1;
+  }
+  html[data-theme="light"] .theme-toggle .thumb::before{
+    opacity:.9;
+    transform:scale(1);
+  }
+
+  /* moon craters — dark mode only, full circular moon */
+  .theme-toggle .thumb::after{
+    content:'';
+    position:absolute;
+    inset:0;
+    border-radius:50%;
+    background:
+      radial-gradient(circle at 32% 30%, rgba(20,30,55,.22) 0 16%, transparent 17%),
+      radial-gradient(circle at 65% 55%, rgba(20,30,55,.16) 0 11%, transparent 12%),
+      radial-gradient(circle at 45% 72%, rgba(20,30,55,.14) 0 9%, transparent 10%);
+    opacity:0;
+    transition:opacity .25s ease;
+  }
+  html[data-theme="dark"] .theme-toggle .thumb::after{ opacity:1; }
 
   /* ---------- panels ---------- */
   .panel{
@@ -157,8 +200,8 @@
     border:1px solid var(--border);
     font-weight:600;
   }
-  button.action:hover{ filter:brightness(1.08); transform:translateY(-1px); box-shadow:var(--shadow); }
-  button.action:active{ transform:translateY(0); }
+  button.action:hover:not(:disabled){ filter:brightness(1.08); transform:translateY(-1px); box-shadow:var(--shadow); }
+  button.action:active:not(:disabled){ transform:translateY(0); }
   button.action:disabled{
     opacity:.4;
     cursor:not-allowed;
@@ -212,9 +255,12 @@
   /* ---------- table ---------- */
   .table-wrap{
     overflow-x:auto;
+    overflow-y:auto;
     border:1px solid var(--border);
     border-radius:12px;
     max-height:70vh;
+    scroll-behavior:smooth;
+    -webkit-overflow-scrolling:touch;
   }
   table{ width:100%; border-collapse:collapse; font-size:12.5px; }
   th,td{
@@ -241,6 +287,10 @@
     color:var(--accent);
     font-weight:700;
   }
+  tr.missing-row td{
+    background:var(--panel-2);
+    color:var(--muted);
+  }
   .empty-state{
     padding:34px 16px;
     text-align:center;
@@ -266,12 +316,8 @@
   </div>
 
   <div class="theme-toggle" id="themeToggle" role="switch" aria-checked="false" aria-label="Toggle dark mode" tabindex="0">
-    <span class="icon sun">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg>
-    </span>
-    <span class="icon moon">
-      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.7 14.9A9 9 0 1 1 9.1 3.3a7 7 0 0 0 11.6 11.6z"/></svg>
-    </span>
+    <span class="star s1"></span>
+    <span class="star s2"></span>
     <span class="thumb"></span>
   </div>
 </div>
@@ -311,6 +357,7 @@ let rawHeader = [];    // original header cells
 let displayHeader = []; // formatted header cells, with Rosa Total columns inserted
 let rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
 let insertAfterIdx = -1;
+let timeColIdx = 1;
 let currentRawCSVForDate = ''; // csv text for the currently selected date, for download
 let selectedISO = '';
 
@@ -349,6 +396,13 @@ function isoOf(d){
   return `${y}-${mo}-${da}`;
 }
 
+// hour prefix ("01".."23","00") from a time cell like "17:20"
+function hourOf(cell){
+  const m = cell.trim().match(/^(\d{1,2}):/);
+  if(!m) return null;
+  return m[1].padStart(2,'0');
+}
+
 async function loadData(){
   const status = document.getElementById('status');
   try{
@@ -361,16 +415,9 @@ async function loadData(){
 
     buildHeaderPlan();
 
-    // default to the most recent date present in the data, else today (clamped to min/max)
-    let defaultDate = MIN_DATE;
-    let latest = null;
-    for(const r of allRows){
-      const d = parseCellDate(r[0]);
-      if(d && (!latest || d > latest)) latest = d;
-    }
-    if(latest) defaultDate = latest;
+    // default selection is always today's date, clamped to the allowed range
+    let defaultDate = today();
     if(defaultDate < MIN_DATE) defaultDate = MIN_DATE;
-    if(defaultDate > today()) defaultDate = today();
 
     const dateInput = document.getElementById('dateInput');
     dateInput.max = isoOf(today());
@@ -381,7 +428,7 @@ async function loadData(){
     status.textContent = 'Last refreshed ' + new Date().toLocaleTimeString();
   }catch(err){
     status.textContent = 'Could not load ' + CSV_PATH + ' yet — the first GitHub Actions run may not have completed. (' + err.message + ')';
-    document.getElementById('downloadBtn').style.display = 'none';
+    document.getElementById('downloadBtn').disabled = true;
     document.getElementById('bodyRows').innerHTML = '';
     document.getElementById('headRow').innerHTML = '';
   }
@@ -391,9 +438,11 @@ function buildHeaderPlan(){
   displayHeader = rawHeader.map(formatHeaderLabel);
   rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
   insertAfterIdx = -1;
+  timeColIdx = 1;
 
   rawHeader.forEach((h, i)=>{
     const n = normalizeHeader(h);
+    if(n === 'TIME') timeColIdx = i;
     if(n === 'ROSA1DC') rosaColIdx.dc[0] = i;
     if(n === 'ROSA2DC') rosaColIdx.dc[1] = i;
     if(n === 'ROSA1SG') rosaColIdx.sg[0] = i;
@@ -427,6 +476,14 @@ function stepDate(delta){
   renderForSelectedDate();
 }
 
+// Builds the full 01:00 -> 00:00 (24 hour) slot list for the day, chronological order.
+function fullDayHourSlots(){
+  const slots = [];
+  for(let h = 1; h <= 23; h++) slots.push(String(h).padStart(2,'0'));
+  slots.push('00');
+  return slots;
+}
+
 function renderForSelectedDate(){
   const input = document.getElementById('dateInput');
   const sel = input.valueAsDate;
@@ -446,16 +503,12 @@ function renderForSelectedDate(){
   const downloadBtn = document.getElementById('downloadBtn');
   const status = document.getElementById('status');
 
-  if(rowsForDate.length === 0){
-    headRow.innerHTML = '';
-    bodyRows.innerHTML = '<tr><td class="empty-state" colspan="1">No data logged for this date yet.</td></tr>';
-    downloadBtn.style.display = 'none';
-    currentRawCSVForDate = '';
-    status.textContent = 'No rows for ' + selectedISO + '.';
-    return;
-  }
-
-  downloadBtn.style.display = '';
+  // map hour -> matching row (last one wins if duplicates)
+  const byHour = {};
+  rowsForDate.forEach(r=>{
+    const hr = hourOf(r[timeColIdx] || '');
+    if(hr) byHour[hr] = r;
+  });
 
   const fullHeader = insertAfterIdx === -1
     ? displayHeader
@@ -466,17 +519,36 @@ function renderForSelectedDate(){
     return `<th${isRosaTotal ? ' class="rosa-total"' : ''}>${h}</th>`;
   }).join('');
 
-  const expandedRows = rowsForDate.map(addRosaTotals);
+  const slots = fullDayHourSlots(); // chronological 01..23,00
+  const slotRows = slots.map(hr=>{
+    const raw = byHour[hr];
+    if(raw) return { missing:false, cells: addRosaTotals(raw) };
+    const blank = new Array(fullHeader.length).fill('');
+    blank[timeColIdx] = hr + ':00';
+    return { missing:true, cells: blank };
+  });
 
-  bodyRows.innerHTML = expandedRows.slice().reverse().map(r =>
-    '<tr>' + r.map((c,i)=>{
+  // newest hour first, matching the previous display convention
+  const displayOrder = slotRows.slice().reverse();
+
+  bodyRows.innerHTML = displayOrder.map(entry=>{
+    const rowClass = entry.missing ? ' class="missing-row"' : '';
+    const tds = entry.cells.map((c,i)=>{
       const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
       return `<td${isRosaTotal ? ' class="rosa-total"' : ''}>${c}</td>`;
-    }).join('') + '</tr>'
-  ).join('');
+    }).join('');
+    return `<tr${rowClass}>${tds}</tr>`;
+  }).join('');
 
-  currentRawCSVForDate = [rawHeader.join(',')].concat(rowsForDate.map(r=>r.join(','))).join('\n');
-  status.textContent = 'Loaded ' + rowsForDate.length + ' row(s) for ' + selectedISO + '.';
+  // CSV download uses only real fetched rows; missing hours are all-empty rows (",,,,,,,")
+  const csvSlotRows = slots.map(hr => byHour[hr] ? byHour[hr] : new Array(rawHeader.length).fill(''));
+  currentRawCSVForDate = [rawHeader.join(',')].concat(csvSlotRows.map(r=>r.join(','))).join('\n');
+
+  const haveData = rowsForDate.length > 0;
+  downloadBtn.disabled = !haveData;
+  status.textContent = haveData
+    ? 'Loaded ' + rowsForDate.length + ' logged hour(s) for ' + selectedISO + '.'
+    : 'No data logged for ' + selectedISO + ' yet.';
 }
 
 function downloadCSV(){
@@ -494,16 +566,53 @@ function createChart(){
   alert('Chart not yet configured.');
 }
 
-/* ---------- theme handling ---------- */
-function setTheme(theme){
+/* ---------- theme handling with a swift circular transition from the toggle ---------- */
+function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
   document.getElementById('themeToggle').setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
   try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
 }
+
 function toggleTheme(){
-  const cur = document.documentElement.getAttribute('data-theme') || 'dark';
-  setTheme(cur === 'dark' ? 'light' : 'dark');
+  const toggleEl = document.getElementById('themeToggle');
+  const rect = toggleEl.getBoundingClientRect();
+  const x = rect.left + rect.width / 2;
+  const y = rect.top + rect.height / 2;
+
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  const newTheme = isDark ? 'light' : 'dark';
+
+  if(!document.startViewTransition){
+    applyTheme(newTheme);
+    return;
+  }
+
+  const transition = document.startViewTransition(() => applyTheme(newTheme));
+  transition.ready.then(() => {
+    const endRadius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y)
+    );
+    const clipPath = [
+      `circle(0px at ${x}px ${y}px)`,
+      `circle(${endRadius}px at ${x}px ${y}px)`
+    ];
+    if(newTheme === 'light'){
+      // day spreads outward from the toggle
+      document.documentElement.animate(
+        { clipPath },
+        { duration: 190, easing: 'ease-out', pseudoElement: '::view-transition-new(root)' }
+      );
+    } else {
+      // day collapses back into the toggle, revealing night underneath
+      document.documentElement.animate(
+        { clipPath: clipPath.slice().reverse() },
+        { duration: 190, easing: 'ease-in', pseudoElement: '::view-transition-old(root)' }
+      );
+    }
+  });
 }
+
 (function initTheme(){
   let theme = 'dark';
   try{
@@ -511,7 +620,7 @@ function toggleTheme(){
     if(saved) theme = saved;
     else if(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) theme = 'light';
   }catch(e){}
-  setTheme(theme);
+  applyTheme(theme);
 })();
 const themeToggleEl = document.getElementById('themeToggle');
 themeToggleEl.addEventListener('click', toggleTheme);
