@@ -259,7 +259,7 @@
   .table-panel{ position:relative; }
   .floating-btn{
     position:absolute;
-    right:16px;
+    right:46px;
     width:42px;
     height:42px;
     border-radius:999px;
@@ -277,8 +277,8 @@
     justify-content:center;
   }
   .floating-btn svg{ width:16px; height:16px; }
-  #copyBtn.floating-btn{ bottom:16px; }
-  #downloadBtn.floating-btn{ bottom:68px; }
+  #copyBtn.floating-btn{ bottom:68px; }
+  #downloadBtn.floating-btn{ bottom:16px; }
   .floating-btn:focus-visible{ opacity:1; }
   @media (hover:hover) and (pointer:fine){
     .floating-btn:hover{ opacity:1; border-color:var(--accent); transform:translateY(-2px); }
@@ -524,6 +524,14 @@
   @media (hover:hover) and (pointer:fine){
     .chart-close:hover, .chart-download:hover, .chart-reset:hover, .chart-expand:hover{ border-color:var(--accent); color:var(--accent); }
   }
+  .chart-reset.breathing{ animation:breathe-btn 500ms ease-in-out; }
+  /* soft persistent glow while a chart selection is active — a visual nudge
+     toward the way back to "all lines" */
+  .chart-reset.reset-glow{
+    border-color:var(--accent);
+    color:var(--accent);
+    box-shadow:0 0 0 3px rgba(240,176,67,.28), 0 0 10px 2px rgba(240,176,67,.35);
+  }
   .chart-canvas-wrap{
     position:relative;
     /* fills whatever vertical space is left once the header, this panel's own
@@ -685,6 +693,12 @@
     <div class="fullscreen-chart-head">
       <h2 id="fullscreenChartTitle">Live Chart</h2>
       <div class="chart-head-actions">
+        <button class="chart-reset" id="fullscreenResetBtn" aria-label="Reset chart selection" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+            <path d="M3 4v5h5"/>
+          </svg>
+        </button>
         <button class="chart-download" id="fullscreenDownloadBtn" aria-label="Download chart as PNG">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3v13"/>
@@ -777,6 +791,10 @@ let insertAfterIdx = -1;
 let timeColIdx = 1;
 let currentRawCSVForDate = ''; // csv text for the currently selected date, for download
 let selectedISO = '';
+// true while the selected date is "today" and should auto-advance at
+// midnight once new data actually arrives; false once the user has
+// deliberately navigated to a different (historical) date
+let followingToday = true;
 
 function parseCSV(text){
   return text.trim().split('\n').map(line => line.split(','));
@@ -834,6 +852,15 @@ async function loadData(silent){
     dateInput.max = isoOf(today());
     if(!dateInput.value){
       dateInput.value = isoOf(defaultDate);
+    } else if(followingToday && dateInput.value !== isoOf(today())){
+      // midnight has passed since the last check — only jump forward once the
+      // fetcher has actually logged a reading for the new day, not the instant
+      // the clock rolls over with nothing there yet
+      const hasDataForNewToday = allRows.some(r=>{
+        const d = parseCellDate(r[0]);
+        return d && isoOf(d) === isoOf(today());
+      });
+      if(hasDataForNewToday) dateInput.value = isoOf(today());
     }
     renderForSelectedDate();
   }catch(err){
@@ -883,6 +910,7 @@ function stepDate(delta){
   const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + delta);
   if(next < MIN_DATE || next > today()) return;
   input.value = isoOf(next);
+  followingToday = (isoOf(next) === isoOf(today()));
   renderForSelectedDate();
 }
 
@@ -1199,9 +1227,22 @@ function clearSelection(){
   updateResetButtonVisibility();
 }
 
+// Shows/hides both Reset buttons (inline + fullscreen). When a selection
+// first becomes active, gives the button a one-time 500ms breathe pulse plus
+// a soft persistent glow, so it's obvious there's now a way back to "all lines".
 function updateResetButtonVisibility(){
-  const btn = document.getElementById('chartResetBtn');
-  if(btn) btn.style.display = selectedLabels.size > 0 ? '' : 'none';
+  const hasSelection = selectedLabels.size > 0;
+  [document.getElementById('chartResetBtn'), document.getElementById('fullscreenResetBtn')].forEach(btn=>{
+    if(!btn) return;
+    const wasVisible = btn.style.display !== 'none';
+    btn.style.display = hasSelection ? '' : 'none';
+    if(hasSelection){
+      btn.classList.add('reset-glow');
+      if(!wasVisible) triggerBreathe(btn, 'breathing'); // pulse once, right on the transition into "has a selection"
+    } else {
+      btn.classList.remove('reset-glow');
+    }
+  });
 }
 
 // programmatically dismiss the hover tooltip — used when tapping outside a
@@ -1460,6 +1501,7 @@ function currentRowsForSelectedDate(){
 document.getElementById('chartDownloadBtn').addEventListener('click', downloadChartPNG);
 document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
 document.getElementById('chartExpandBtn').addEventListener('click', openFullscreenChart);
+document.getElementById('fullscreenResetBtn').addEventListener('click', clearSelection);
 document.getElementById('fullscreenDownloadBtn').addEventListener('click', downloadChartPNG);
 document.getElementById('fullscreenCloseBtn').addEventListener('click', closeFullscreenChart);
 document.getElementById('fullscreenChartOverlay').addEventListener('click', (e)=>{
@@ -1486,10 +1528,13 @@ document.addEventListener('click', (e)=>{
 });
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
+  // first Esc always returns to the default "everything visible" view, even
+  // if the fullscreen chart is open — only once nothing is selected does Esc
+  // move on to closing fullscreen, then collapsing the table
+  if(selectedLabels.size > 0){ clearSelection(); return; }
   const fsOverlay = document.getElementById('fullscreenChartOverlay');
-  if(fsOverlay && !fsOverlay.hidden){ closeFullscreenChart(); return; } // first: close the fullscreen view if open
-  if(selectedLabels.size > 0){ clearSelection(); return; } // then: drop any chart selection
-  if(tableExpanded) setTableExpanded(false); // then: collapse the table if it's open
+  if(fsOverlay && !fsOverlay.hidden){ closeFullscreenChart(); return; }
+  if(tableExpanded) setTableExpanded(false);
 });
 
 /* ---------- theme handling with a swift circular transition from the toggle ---------- */
@@ -1558,7 +1603,11 @@ themeToggleEl.addEventListener('click', toggleTheme);
 themeToggleEl.addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleTheme(); }
 });
-document.getElementById('dateInput').addEventListener('change', renderForSelectedDate);
+document.getElementById('dateInput').addEventListener('change', ()=>{
+  const val = document.getElementById('dateInput').value;
+  followingToday = (val === isoOf(today()));
+  renderForSelectedDate();
+});
 
 // Triggers the 250ms-in/250ms-out breathe animation from the 'click' event
 // (fires on release) rather than :active, so a fast tap still plays the
