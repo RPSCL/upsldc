@@ -50,6 +50,9 @@
     padding:26px 28px 40px;
     scrollbar-width:thin;
     scrollbar-color: var(--border) transparent;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
   }
   body::-webkit-scrollbar{ width:10px; }
   body::-webkit-scrollbar-track{ background:transparent; }
@@ -496,9 +499,12 @@
   }
   #tableBodyWrap[hidden]{ display:none; }
 
-  /* extra separation pushes the Data Table bar further from the chart above it */
+  /* keeps a bit of separation from the chart above, but stays tight to the
+     footer right below it — this whole bottom cluster now sits flush at the
+     true bottom of the viewport thanks to the chart panel's flex-grow above */
   .table-panel{
-    margin-top:26px;
+    margin-top:14px;
+    margin-bottom:8px;
     padding:0; /* padding now lives on .table-toggle itself, so the whole
                   visible bar — not just an inner box — is clickable */
     overflow:hidden;
@@ -547,24 +553,70 @@
     color:var(--accent);
     box-shadow:0 0 0 3px rgba(240,176,67,.28), 0 0 10px 2px rgba(240,176,67,.35);
   }
+  /* the chart panel grows via flexbox to fill whatever space is actually
+     left above the table+footer, instead of guessing a fixed vh offset —
+     robust regardless of exact header/toolbar/footer heights */
+  #chartPanel{
+    display:flex;
+    flex-direction:column;
+    flex:1 1 auto;
+    min-height:0;
+  }
+
+  /* custom DOM legend: sits directly under the "Live Chart" title on desktop,
+     replacing Chart.js's own canvas-drawn legend there (which carries fixed
+     internal padding we can't tighten). Mobile keeps the native legend
+     instead — see the mobile override below and buildChartOptions(). */
+  .chart-legend-row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px 14px;
+    margin-top:6px;
+  }
+  .legend-chip{
+    display:inline-flex;
+    align-items:center;
+    gap:6px;
+    background:none;
+    border:none;
+    padding:2px 0;
+    margin:0;
+    color:var(--text);
+    font-size:12px;
+    font-weight:500;
+    cursor:pointer;
+    opacity:1;
+    transition:opacity .15s ease;
+  }
+  .legend-chip.dimmed{ opacity:.4; }
+  .legend-swatch{
+    width:10px;
+    height:10px;
+    border-radius:50%;
+    flex:0 0 auto;
+  }
+  @media (hover:hover) and (pointer:fine){
+    .legend-chip:hover{ opacity:1; }
+  }
+
   .chart-canvas-wrap{
     position:relative;
-    /* fills whatever vertical space is left once the header, this panel's own
-       chrome, the collapsed table bar, and the footer are accounted for —
-       so with the table collapsed, the whole page fits one screen and the
-       chart claims essentially all the freed-up room */
-    height:calc(100vh - 340px);
-    min-height:360px;
+    flex:1 1 auto;
+    min-height:320px;
   }
   @media (max-width:640px){
     /* square-ish rather than tall, so the collapsed table bar and footer
        stay visible on screen without scrolling */
+    #chartPanel{ flex:0 0 auto; }
     .chart-canvas-wrap{
       aspect-ratio: 1 / 1;
+      flex:0 0 auto;
       height:auto;
       max-height:calc(100vh - 380px);
+      min-height:0;
     }
     .chart-section-head .chart-sub{ display:none; }
+    .chart-legend-row{ display:none; } /* native canvas legend is used on mobile instead */
   }
 
   /* ---------- fullscreen chart overlay (vertical only, no rotation) ---------- */
@@ -685,7 +737,7 @@
     color:var(--text);
     opacity:.3;
     font-size:12px;
-    padding:22px 0 4px;
+    padding:2px 0 4px;
   }
 
   /* ---------- mobile: compact header, compact chart header ---------- */
@@ -702,7 +754,7 @@
     html[data-theme="dark"] .theme-toggle .thumb{ transform:translateX(24px); }
 
     .panel{ padding:12px; border-radius:14px; }
-    .table-panel{ padding:0; margin-top:20px; }
+    .table-panel{ padding:0; margin-top:14px; }
     .table-toggle{ padding:12px; }
     #tableBodyWrap{ padding:0 12px 12px; }
     .chart-section-head{ gap:8px; }
@@ -772,6 +824,7 @@
       </button>
     </div>
   </div>
+  <div class="chart-legend-row" id="chartLegendRow"></div>
   <div class="chart-canvas-wrap">
     <canvas id="liveChartCanvas"></canvas>
   </div>
@@ -1113,8 +1166,8 @@ function renderForSelectedDate(){
 
   downloadBtn.disabled = false;
   lastRowCount = sorted.length;
-  if(chartSub) chartSub.textContent = selectedISO + ' — ' + sorted.length + ' reading(s)';
-  if(tableToggleSub) tableToggleSub.textContent = selectedISO + ' — ' + sorted.length + ' reading(s)';
+  if(chartSub) chartSub.textContent = selectedISO;
+  if(tableToggleSub) tableToggleSub.textContent = selectedISO;
   updateFloatingButtonsVisibility();
 
   initOrUpdateLiveChart(rowsForDate);
@@ -1330,6 +1383,26 @@ function applySelectionStyling(){
     });
     chart.update();
   });
+  renderCustomLegend();
+}
+
+// Desktop-only DOM legend that sits right under the "Live Chart" title
+// (inline with it, wrapping onto its own line) — replaces Chart.js's
+// built-in canvas legend there, since that one carries fixed internal
+// padding we can't tighten. Mobile keeps the native canvas legend as-is,
+// this row is simply hidden by CSS below the 640px breakpoint.
+function renderCustomLegend(){
+  const container = document.getElementById('chartLegendRow');
+  if(!container || !liveChart) return;
+  container.innerHTML = liveChart.data.datasets.map(ds=>{
+    const isSelected = selectedLabels.size === 0 || selectedLabels.has(ds.label);
+    const color = ds._origColor || ds.borderColor;
+    const safeLabel = String(ds.label).replace(/"/g,'&quot;');
+    return '<button type="button" class="legend-chip' + (isSelected ? '' : ' dimmed') + '" data-label="' + safeLabel + '">'
+      + '<span class="legend-swatch" style="background:' + color + '"></span>'
+      + '<span>' + ds.label + '</span>'
+      + '</button>';
+  }).join('');
 }
 
 function toggleSelection(label){
@@ -1461,7 +1534,7 @@ function openFullscreenChart(){
   const { labels, datasets } = buildTaggedDatasets(rowsForDate);
   const ctx = document.getElementById('fullscreenChartCanvas').getContext('2d');
   if(fullscreenChart) fullscreenChart.destroy();
-  fullscreenChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions(false) });
+  fullscreenChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions(false, true) });
   applySelectionStyling(); // sync current selection onto the new instance
 
   updateChartTitle();
@@ -1515,7 +1588,7 @@ function downloadChartPNG(){
     tempCanvas.style.top = '0';
     document.body.appendChild(tempCanvas);
 
-    const desktopOptions = buildChartOptions(false);
+    const desktopOptions = buildChartOptions(false, true);
     desktopOptions.responsive = false;
     desktopOptions.maintainAspectRatio = false;
     desktopOptions.animation = false;
@@ -1617,8 +1690,16 @@ window.addEventListener('orientationchange', () => { if(liveChart || fullscreenC
 
 // forceCompact: pass true/false to override device detection (used for PNG export,
 // which always renders desktop-style regardless of the device it's downloaded from).
-function buildChartOptions(forceCompact){
+// forceCompact: overrides device detection (used for PNG/HTML export and the
+// fullscreen view, which always render desktop-style regardless of device).
+// forceLegend: overrides whether Chart.js draws its own built-in legend.
+// Left undefined, it defaults to compact — i.e. the native legend only shows
+// on mobile, since desktop uses the custom DOM legend next to the title
+// instead. Fullscreen and exports always force it true, since neither has
+// that DOM legend available to fall back on.
+function buildChartOptions(forceCompact, forceLegend){
   const compact = (typeof forceCompact === 'boolean') ? forceCompact : isPhonePortrait();
+  const showNativeLegend = (typeof forceLegend === 'boolean') ? forceLegend : compact;
   const c = chartThemeColors();
   return {
     responsive: true,
@@ -1633,6 +1714,7 @@ function buildChartOptions(forceCompact){
     },
     plugins:{
       legend:{
+        display: showNativeLegend,
         position:'top',
         onClick(evt, legendItem){
           toggleSelection(legendItem.text);
@@ -1698,6 +1780,10 @@ document.getElementById('downloadOptionsCloseBtn').addEventListener('click', clo
 document.getElementById('downloadOptionsOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'downloadOptionsOverlay') closeDownloadOptions();
 });
+document.getElementById('chartLegendRow').addEventListener('click', (e)=>{
+  const chip = e.target.closest('.legend-chip');
+  if(chip) toggleSelection(chip.dataset.label);
+});
 // Anywhere outside the plot itself — the header, the page background, either
 // overlay's chrome, or even the axis/scale label gutters *within* the canvas —
 // dismisses the hover tooltip. Matters most on touch, where a tap otherwise
@@ -1737,7 +1823,7 @@ function applyTheme(theme){
   try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
   const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
   [liveChart, fullscreenChart].filter(Boolean).forEach(chart=>{
-    chart.options = buildChartOptions(chart === fullscreenChart ? false : undefined);
+    chart.options = buildChartOptions(chart === fullscreenChart ? false : undefined, chart === fullscreenChart ? true : undefined);
     const demandDs = chart.data.datasets.find(d => d.label === 'Total Demand');
     if(demandDs) demandDs._origColor = accent; // keep the "true" color in sync so selection/dimming stays correct
   });
