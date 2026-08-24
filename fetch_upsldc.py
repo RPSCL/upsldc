@@ -1,7 +1,13 @@
 """
 Fetches live UPSLDC data and appends one row to upsldc_hourly_data.csv.
-Data older than 120 days is moved to historical.csv.
-If the last CSV row is 10 minutes old or newer, no fetch is performed.
+Runs every 5 minutes.
+
+At 00:00 every day:
+- Yesterday remains at 5-minute frequency.
+- Previous 10 days are reduced to 15-minute frequency.
+- Older data is reduced to hourly frequency.
+- Data older than 120 days is moved to historical.csv.
+
 New data is sent to Telegram.
 """
 
@@ -10,13 +16,15 @@ import csv
 import time
 from datetime import datetime, timedelta
 from urllib.parse import quote
+
 import requests
+
 
 MAIN_URL = "https://www.upsldc.org/assets/dataset/realtime.json"
 SUMMARY_URL = "https://www.upsldc.org/assets/dataset/real-time-summary.json"
 
-BOT_TOKEN = "5588744140:AAFMzYGBbQDzZ_hYDf9d1WSTHmC3I-Z3kZk"
-TST_ID = "-1003175374557"
+BOT_TOKEN = "YOUR_BOT_TOKEN"
+TST_ID = "YOUR_CHAT_ID"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_CSV = os.path.join(BASE_DIR, "upsldc_hourly_data.csv")
@@ -50,14 +58,17 @@ PLANT_MAPPING = {
     "ROSA 2": "ROSA-II",
 }
 
+
 def header_row():
     header = ["Date", "Time", "TOTAL_DEMAND", "SOLAR_GEN"]
     for key in PLANT_SEQUENCE:
         header += [f"{key}_DC", f"{key}_SG", f"{key}_AG"]
     return header
 
+
 def clean(s):
     return (s or "").lower().replace(" ", "")
+
 
 def last_row_is_recent():
     if not os.path.exists(OUTPUT_CSV):
@@ -91,8 +102,8 @@ def last_row_is_recent():
         print(f"Last CSV row time: {last_datetime.strftime('%d-%b-%y %H:%M')}")
         print(f"Last CSV row age: {age_minutes:.1f} minutes")
 
-        if age <= timedelta(minutes=10):
-            print("Last row is within 10 minutes. Skipping UPSLDC fetch.")
+        if age <= timedelta(minutes=5):
+            print("Last row is within 5 minutes. Skipping UPSLDC fetch.")
             return True
 
         return False
@@ -100,6 +111,57 @@ def last_row_is_recent():
     except Exception as e:
         print(f"Could not check last CSV row: {e}")
         return False
+
+
+def compact_csv():
+    if not os.path.exists(OUTPUT_CSV):
+        return
+
+    expected_header = header_row()
+
+    with open(OUTPUT_CSV, "r", newline="", encoding="utf-8") as f:
+        rows = list(csv.reader(f))
+
+    data_rows = rows[1:] if rows and rows[0] == expected_header else rows
+
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+    ten_day_start = yesterday - timedelta(days=10)
+
+    retained_rows = []
+
+    for row in data_rows:
+        if not row or not any(cell.strip() for cell in row):
+            continue
+
+        try:
+            row_date = datetime.strptime(row[0].strip(), "%d-%b-%y").date()
+            row_time = datetime.strptime(row[1].strip(), "%H:%M").time()
+
+            # Yesterday and today: keep all data
+            if row_date >= yesterday:
+                retained_rows.append(row)
+
+            # Previous 10 days: keep 15-minute data
+            elif row_date >= ten_day_start:
+                if row_time.minute % 15 == 0:
+                    retained_rows.append(row)
+
+            # Older data: keep hourly data only
+            else:
+                if row_time.minute == 0:
+                    retained_rows.append(row)
+
+        except (ValueError, IndexError):
+            retained_rows.append(row)
+
+    with open(OUTPUT_CSV, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(expected_header)
+        writer.writerows(retained_rows)
+
+    print(f"CSV compacted: {len(retained_rows)} rows retained")
+
 
 def prepare_csv():
     expected_header = header_row()
@@ -151,11 +213,10 @@ def prepare_csv():
         writer.writerow(expected_header)
         writer.writerows(valid_rows)
 
+
 def fetch_json(url):
     last_error = None
 
-    # try the direct URL first, up to 3 times — this is the one that
-    # actually works from this box, so we hit it before wasting time on proxies
     for attempt in range(3):
         try:
             resp = requests.get(url, headers=HEADERS, timeout=20)
@@ -167,7 +228,6 @@ def fetch_json(url):
             print(f"Direct fetch attempt {attempt + 1}/3 failed for {url}: {e}")
             time.sleep(2)
 
-    # only fall back to proxies if all 3 direct attempts failed
     print(f"Direct fetch failed 3x, falling back to proxies for {url}")
 
     for template in PROXY_URL_TEMPLATES:
@@ -183,6 +243,7 @@ def fetch_json(url):
             time.sleep(2)
 
     raise RuntimeError(f"All fetch attempts failed for {url}: {last_error}")
+
 
 def extract_summary(summary_json):
     demand = None
@@ -207,6 +268,7 @@ def extract_summary(summary_json):
 
     scan(summary_json)
     return demand, solar
+
 
 def extract_plants(main_json):
     plant_data = {
@@ -261,22 +323,24 @@ def extract_plants(main_json):
 
     return plant_data
 
-def round_to_nearest_10_minutes(dt):
+
+def round_to_nearest_5_minutes(dt):
     discard = timedelta(
-        minutes=dt.minute % 15,
+        minutes=dt.minute % 5,
         seconds=dt.second,
         microseconds=dt.microsecond
     )
 
     rounded = dt - discard
 
-    if dt.minute % 15 >= 8:
-        rounded += timedelta(minutes=15)
+    if dt.minute % 5 >= 3:
+        rounded += timedelta(minutes=5)
 
     return rounded
 
+
 def build_row(main_json, summary_json):
-    now = round_to_nearest_10_minutes(datetime.now())
+    now = round_to_nearest_5_minutes(datetime.now())
     date_str = now.strftime("%d-%b-%y")
     time_str = now.strftime("%H:%M")
 
@@ -291,9 +355,11 @@ def build_row(main_json, summary_json):
 
     return row
 
+
 def append_row(row):
     with open(OUTPUT_CSV, "a", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(row)
+
 
 def send_to_telegram(row):
     headers = header_row()
@@ -304,7 +370,6 @@ def send_to_telegram(row):
     demand = row_dict["TOTAL_DEMAND"]
     solar = row_dict["SOLAR_GEN"]
 
-    # only AG (actual generation) per plant, plant name padded to align the column
     name_width = max(len(key) for key in PLANT_SEQUENCE)
 
     table_lines = []
@@ -329,7 +394,7 @@ def send_to_telegram(row):
     payload = {
         "chat_id": TST_ID,
         "text": message,
-        "parse_mode": "Markdown"  # renders the ``` block as monospace on Telegram
+        "parse_mode": "Markdown"
     }
 
     try:
@@ -345,12 +410,19 @@ def send_to_telegram(row):
     except Exception as e:
         print(f"Telegram send failed: {e}")
 
+
 def main():
+    now = round_to_nearest_5_minutes(datetime.now())
+
+    # Compact CSV once daily at 00:00
+    if now.hour == 0 and now.minute == 0:
+        compact_csv()
+
+    prepare_csv()
+
     if last_row_is_recent():
         print("No new fetch required.")
         return
-
-    prepare_csv()
 
     main_json = fetch_json(MAIN_URL)
     summary_json = fetch_json(SUMMARY_URL)
@@ -361,6 +433,7 @@ def main():
     send_to_telegram(row)
 
     print("Successful")
+
 
 if __name__ == "__main__":
     main()
