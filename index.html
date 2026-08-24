@@ -1816,7 +1816,8 @@ window.addEventListener('focus', () => { if(liveChart || fullscreenChart) syncCh
 // fullscreen view, which always render desktop-style regardless of device).
 // forceLegend: overrides whether Chart.js draws its own built-in legend.
 // Left undefined, it defaults to compact — i.e. the native legend only shows
-// on mobile, since desktop uses the custom DOM legend next to the title
+// on mobile, since desktop uses the custom DOM legend next to the title.
+
 // Picks a clean, round time interval (5/10/15/30/60/120min etc.) and
 // generates ticks directly at exact multiples of it across the axis's real
 // numeric range. Because the x-axis is now a genuine linear scale (see
