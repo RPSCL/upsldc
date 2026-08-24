@@ -1514,14 +1514,35 @@ function isPhonePortrait(){
   return window.matchMedia('(max-width: 640px)').matches;
 }
 
+// Chart.js's own auto-detect resize() re-measures its container at call
+// time — but right after a phone browser resumes from being backgrounded
+// (or a bfcache restore), that measurement can still be stale/near-zero for
+// a beat, and resize() just reconfirms the same broken size. Measuring the
+// wrapper's real bounding box ourselves and passing explicit dimensions
+// sidesteps that entirely.
+function forceChartResize(chart, wrapSelector){
+  if(!chart) return;
+  const wrap = document.querySelector(wrapSelector);
+  if(wrap){
+    const rect = wrap.getBoundingClientRect();
+    if(rect.width > 4 && rect.height > 4){
+      chart.resize(rect.width, rect.height);
+      return;
+    }
+  }
+  chart.resize();
+}
+
 function syncChartLayout(){
-  if(liveChart){
-    liveChart.options = buildChartOptions(); // re-picks compact/full sizing for the current width
-    setTimeout(() => liveChart && liveChart.resize(), 60);
-  }
-  if(fullscreenChart){
-    setTimeout(() => fullscreenChart && fullscreenChart.resize(), 60);
-  }
+  if(liveChart) liveChart.options = buildChartOptions(); // re-picks compact/full sizing for the current width
+  const run = () => {
+    forceChartResize(liveChart, '.chart-canvas-wrap');
+    forceChartResize(fullscreenChart, '.fullscreen-chart-canvas-wrap');
+  };
+  // double rAF: wait for the browser to actually finish a layout/paint pass
+  // before measuring, which a single setTimeout guess can't guarantee
+  requestAnimationFrame(() => requestAnimationFrame(run));
+  setTimeout(run, 400); // extra safety net specifically for slow/cold mobile resumes
 }
 
 function updateChartTitle(){
@@ -1573,8 +1594,8 @@ function initOrUpdateLiveChart(rowsForDate){
     // two follow-up resizes: the layout may not have fully settled on the
     // very first paint (slow/cold loads), so a single quick check isn't
     // always enough — this costs nothing if the first one was already right
-    setTimeout(() => liveChart && liveChart.resize(), 60);
-    setTimeout(() => liveChart && liveChart.resize(), 400);
+    setTimeout(() => forceChartResize(liveChart, '.chart-canvas-wrap'), 60);
+    setTimeout(() => forceChartResize(liveChart, '.chart-canvas-wrap'), 400);
   } else {
     const { labels, datasets } = buildTaggedDatasets(rowsForDate);
     mergeDataIntoChart(liveChart, labels, datasets);
@@ -1773,6 +1794,29 @@ window.addEventListener('focus', () => { if(liveChart || fullscreenChart) syncCh
 // on mobile, since desktop uses the custom DOM legend next to the title
 // instead. Fullscreen and exports always force it true, since neither has
 // that DOM legend available to fall back on.
+// Picks a clean, round time interval (5/10/15/30/60/120min etc.) so the
+// x-axis shows genuinely equidistant timestamps instead of Chart.js's
+// default index-based auto-skip, which can look uneven when the underlying
+// data has gaps. Snaps to whichever candidate keeps the tick count at or
+// under maxTicks, always keeping the first/last data point's tick.
+function filterTicksToEquidistantInterval(axis, maxTicks){
+  const labels = axis.chart.data.labels || [];
+  if(!axis.ticks || axis.ticks.length === 0 || labels.length === 0) return;
+  const toMinutes = (t)=>{
+    const parts = String(t).split(':');
+    return (parseInt(parts[0],10)||0) * 60 + (parseInt(parts[1],10)||0);
+  };
+  const tickMinutes = axis.ticks.map(t => toMinutes(labels[t.value]));
+  const span = Math.max(tickMinutes[tickMinutes.length - 1] - tickMinutes[0], 1);
+  const candidates = [5,10,15,30,60,120,180,240,360,480,720,1440];
+  let interval = candidates[candidates.length - 1];
+  for(const c of candidates){
+    if(Math.floor(span / c) + 1 <= maxTicks){ interval = c; break; }
+  }
+  const base = tickMinutes[0];
+  axis.ticks = axis.ticks.filter((t,i) => (tickMinutes[i] - base) % interval === 0);
+}
+
 function buildChartOptions(forceCompact, forceLegend){
   const compact = (typeof forceCompact === 'boolean') ? forceCompact : isPhonePortrait();
   const showNativeLegend = (typeof forceLegend === 'boolean') ? forceLegend : compact;
@@ -1815,8 +1859,9 @@ function buildChartOptions(forceCompact, forceLegend){
     },
     scales:{
       x:{
-        ticks:{ color:c.muted, maxRotation:0, autoSkip:true, font:{ size: compact ? 9 : 11 } },
-        grid:{ color:c.border }
+        ticks:{ color:c.muted, maxRotation:0, autoSkip:false, font:{ size: compact ? 9 : 11 } },
+        grid:{ color:c.border },
+        afterBuildTicks: (axis) => filterTicksToEquidistantInterval(axis, compact ? 10 : 24)
       },
       yAG:{
         position:'left',
