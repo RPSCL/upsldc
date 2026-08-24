@@ -674,7 +674,8 @@
     align-items:center;
     justify-content:center;
     padding:20px;
-    z-index:150;
+    z-index:250; /* must sit above the fullscreen chart overlay (200), which
+                    is where this popup is triggered from most often */
   }
   .download-options-overlay[hidden]{ display:none; }
   .download-options-panel{
@@ -1099,6 +1100,16 @@ function setTableExpanded(expanded){
   document.getElementById('tableBodyWrap').hidden = !expanded;
   document.getElementById('tableToggleBtn').setAttribute('aria-expanded', expanded ? 'true' : 'false');
   updateFloatingButtonsVisibility();
+  if(expanded){
+    // jump straight to the newest reading — both the page itself (so the
+    // now-tall table is actually in view) and the table's own internal
+    // scroll area (so its bottom-most row, the latest one, is what's shown)
+    requestAnimationFrame(() => {
+      const tw = document.querySelector('.table-wrap');
+      if(tw) tw.scrollTop = tw.scrollHeight;
+      window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' });
+    });
+  }
 }
 function toggleTableExpanded(){ setTableExpanded(!tableExpanded); }
 
@@ -1189,6 +1200,7 @@ function downloadCSV(){
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  if(tableExpanded) setTableExpanded(false); // back to the one-window landing view once the download's fired
 }
 
 function buildTableClipboardText(){
@@ -1202,7 +1214,10 @@ function buildTableClipboardText(){
 function showCopySuccess(btn){
   btn.classList.add('copied');
   clearTimeout(btn._copyTimeout);
-  btn._copyTimeout = setTimeout(() => btn.classList.remove('copied'), 1400);
+  btn._copyTimeout = setTimeout(() => {
+    btn.classList.remove('copied');
+    if(tableExpanded) setTableExpanded(false); // back to the one-window landing view once the "Copied" animation finishes
+  }, 1400);
 }
 
 async function copyTableToClipboard(btn){
