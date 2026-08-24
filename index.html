@@ -252,53 +252,59 @@
     box-shadow:none;
   }
 
-  /* floating icon buttons (Download CSV, Copy): anchored inside the table
-     panel's own bottom-right corner (not the viewport), semi-transparent
-     until interacted with, stacked vertically. Copy additionally fades to a
-     green checkmark on success — soft in, soft out. */
-  .table-panel{ position:relative; }
-  .floating-btn{
-    position:absolute;
-    right:16px;
-    width:42px;
-    height:42px;
+  /* table action buttons: real, static, subtle pebble buttons sitting below
+     the table — not floating over the data — shown only while the table is
+     expanded. Copy additionally fades to a green checkmark on success. */
+  .table-actions{
+    display:flex;
+    justify-content:flex-end;
+    gap:10px;
+    margin-top:14px;
+    flex-wrap:wrap;
+  }
+  .table-action-btn{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    padding:8px 16px;
     border-radius:999px;
     border:1px solid var(--border);
-    background:var(--panel);
-    color:var(--text);
-    box-shadow:var(--shadow);
+    background:var(--panel-2);
+    color:var(--muted);
+    font-size:12.5px;
+    font-weight:600;
     cursor:pointer;
-    opacity:.5;
-    transition:opacity .2s ease, border-color .15s ease, transform .15s ease;
-    z-index:5;
-    padding:0;
-    display:flex;
-    align-items:center;
-    justify-content:center;
+    opacity:.8;
+    transition:opacity .2s ease, border-color .15s ease, color .15s ease, transform .15s ease;
   }
-  .floating-btn svg{ width:16px; height:16px; }
-  #copyBtn.floating-btn{ bottom:16px; }
-  #downloadBtn.floating-btn{ bottom:68px; }
-  .floating-btn:focus-visible{ opacity:1; }
+  .table-action-btn svg{ width:15px; height:15px; flex:0 0 auto; }
+  .table-action-btn:focus-visible{ opacity:1; }
   @media (hover:hover) and (pointer:fine){
-    .floating-btn:hover{ opacity:1; border-color:var(--accent); transform:translateY(-2px); }
+    .table-action-btn:hover{ opacity:1; border-color:var(--accent); color:var(--text); transform:translateY(-1px); }
   }
-  .floating-btn:active{ opacity:1; border-color:var(--accent); }
-  .floating-btn:disabled{ opacity:.25; cursor:not-allowed; transform:none; }
-  .floating-btn .btn-label,
-  .floating-btn .btn-check{
-    position:absolute;
-    inset:0;
-    display:flex;
+  .table-action-btn:active{ opacity:1; border-color:var(--accent); color:var(--text); }
+  .table-action-btn:disabled{ opacity:.35; cursor:not-allowed; transform:none; }
+  #copyBtn.table-action-btn{ min-width:96px; justify-content:center; }
+  #copyBtn.table-action-btn .btn-label,
+  #copyBtn.table-action-btn .btn-check{
+    display:inline-flex;
     align-items:center;
-    justify-content:center;
+    gap:7px;
     transition:opacity .28s ease;
   }
-  .floating-btn .btn-check{ color:#3ecf7e; opacity:0; pointer-events:none; }
-  .floating-btn.copied .btn-label{ opacity:0; }
-  .floating-btn.copied .btn-check{ opacity:1; }
+  #copyBtn.table-action-btn .btn-check{
+    position:absolute;
+    inset:0;
+    justify-content:center;
+    color:#3ecf7e;
+    opacity:0;
+    pointer-events:none;
+  }
+  #copyBtn.table-action-btn.copied .btn-label{ opacity:0; }
+  #copyBtn.table-action-btn.copied .btn-check{ opacity:1; }
   @media (max-width:640px){
-    #copyBtn.floating-btn{ display:none; } /* clipboard copy is desktop/web-view only */
+    #copyBtn.table-action-btn{ display:none; } /* clipboard copy is desktop/web-view only */
   }
 
   /* ---------- compact date nav (lives in the chart section header) ---------- */
@@ -524,6 +530,14 @@
   @media (hover:hover) and (pointer:fine){
     .chart-close:hover, .chart-download:hover, .chart-reset:hover, .chart-expand:hover{ border-color:var(--accent); color:var(--accent); }
   }
+  .chart-reset.breathing{ animation:breathe-btn 500ms ease-in-out; }
+  /* soft persistent glow while a chart selection is active — a visual nudge
+     toward the way back to "all lines" */
+  .chart-reset.reset-glow{
+    border-color:var(--accent);
+    color:var(--accent);
+    box-shadow:0 0 0 3px rgba(240,176,67,.28), 0 0 10px 2px rgba(240,176,67,.35);
+  }
   .chart-canvas-wrap{
     position:relative;
     /* fills whatever vertical space is left once the header, this panel's own
@@ -685,6 +699,12 @@
     <div class="fullscreen-chart-head">
       <h2 id="fullscreenChartTitle">Live Chart</h2>
       <div class="chart-head-actions">
+        <button class="chart-reset" id="fullscreenResetBtn" aria-label="Reset chart selection" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 3-6.7"/>
+            <path d="M3 4v5h5"/>
+          </svg>
+        </button>
         <button class="chart-download" id="fullscreenDownloadBtn" aria-label="Download chart as PNG">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3v13"/>
@@ -718,28 +738,31 @@
         <tbody id="bodyRows"></tbody>
       </table>
     </div>
-    <button class="floating-btn" id="downloadBtn" onclick="downloadCSV()" aria-label="Download CSV" title="Download CSV" style="display:none;">
-      <span class="btn-label" aria-hidden="true">
+    <div class="table-actions">
+      <button class="table-action-btn" id="copyBtn" onclick="copyTableToClipboard(this)" style="display:none;">
+        <span class="btn-label" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="8" y="8" width="12" height="12" rx="2"/>
+            <path d="M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>
+          </svg>
+          <span>Copy</span>
+        </span>
+        <span class="btn-check" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 12.5l4 4 8-9"/>
+          </svg>
+          <span>Copied</span>
+        </span>
+      </button>
+      <button class="table-action-btn" id="downloadBtn" onclick="downloadCSV()" style="display:none;">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3v13"/>
           <path d="M7 11l5 5 5-5"/>
           <path d="M4 20h16"/>
         </svg>
-      </span>
-    </button>
-    <button class="floating-btn" id="copyBtn" onclick="copyTableToClipboard(this)" aria-label="Copy table" title="Copy table" style="display:none;">
-      <span class="btn-label" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="8" y="8" width="12" height="12" rx="2"/>
-          <path d="M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>
-        </svg>
-      </span>
-      <span class="btn-check" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M6 12.5l4 4 8-9"/>
-        </svg>
-      </span>
-    </button>
+        <span>Download CSV</span>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -777,6 +800,10 @@ let insertAfterIdx = -1;
 let timeColIdx = 1;
 let currentRawCSVForDate = ''; // csv text for the currently selected date, for download
 let selectedISO = '';
+// true while the selected date is "today" and should auto-advance at
+// midnight once new data actually arrives; false once the user has
+// deliberately navigated to a different (historical) date
+let followingToday = true;
 
 function parseCSV(text){
   return text.trim().split('\n').map(line => line.split(','));
@@ -834,6 +861,15 @@ async function loadData(silent){
     dateInput.max = isoOf(today());
     if(!dateInput.value){
       dateInput.value = isoOf(defaultDate);
+    } else if(followingToday && dateInput.value !== isoOf(today())){
+      // midnight has passed since the last check — only jump forward once the
+      // fetcher has actually logged a reading for the new day, not the instant
+      // the clock rolls over with nothing there yet
+      const hasDataForNewToday = allRows.some(r=>{
+        const d = parseCellDate(r[0]);
+        return d && isoOf(d) === isoOf(today());
+      });
+      if(hasDataForNewToday) dateInput.value = isoOf(today());
     }
     renderForSelectedDate();
   }catch(err){
@@ -883,6 +919,7 @@ function stepDate(delta){
   const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + delta);
   if(next < MIN_DATE || next > today()) return;
   input.value = isoOf(next);
+  followingToday = (isoOf(next) === isoOf(today()));
   renderForSelectedDate();
 }
 
@@ -1199,9 +1236,22 @@ function clearSelection(){
   updateResetButtonVisibility();
 }
 
+// Shows/hides both Reset buttons (inline + fullscreen). When a selection
+// first becomes active, gives the button a one-time 500ms breathe pulse plus
+// a soft persistent glow, so it's obvious there's now a way back to "all lines".
 function updateResetButtonVisibility(){
-  const btn = document.getElementById('chartResetBtn');
-  if(btn) btn.style.display = selectedLabels.size > 0 ? '' : 'none';
+  const hasSelection = selectedLabels.size > 0;
+  [document.getElementById('chartResetBtn'), document.getElementById('fullscreenResetBtn')].forEach(btn=>{
+    if(!btn) return;
+    const wasVisible = btn.style.display !== 'none';
+    btn.style.display = hasSelection ? '' : 'none';
+    if(hasSelection){
+      btn.classList.add('reset-glow');
+      if(!wasVisible) triggerBreathe(btn, 'breathing'); // pulse once, right on the transition into "has a selection"
+    } else {
+      btn.classList.remove('reset-glow');
+    }
+  });
 }
 
 // programmatically dismiss the hover tooltip — used when tapping outside a
@@ -1460,6 +1510,7 @@ function currentRowsForSelectedDate(){
 document.getElementById('chartDownloadBtn').addEventListener('click', downloadChartPNG);
 document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
 document.getElementById('chartExpandBtn').addEventListener('click', openFullscreenChart);
+document.getElementById('fullscreenResetBtn').addEventListener('click', clearSelection);
 document.getElementById('fullscreenDownloadBtn').addEventListener('click', downloadChartPNG);
 document.getElementById('fullscreenCloseBtn').addEventListener('click', closeFullscreenChart);
 document.getElementById('fullscreenChartOverlay').addEventListener('click', (e)=>{
@@ -1486,10 +1537,13 @@ document.addEventListener('click', (e)=>{
 });
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
+  // first Esc always returns to the default "everything visible" view, even
+  // if the fullscreen chart is open — only once nothing is selected does Esc
+  // move on to closing fullscreen, then collapsing the table
+  if(selectedLabels.size > 0){ clearSelection(); return; }
   const fsOverlay = document.getElementById('fullscreenChartOverlay');
-  if(fsOverlay && !fsOverlay.hidden){ closeFullscreenChart(); return; } // first: close the fullscreen view if open
-  if(selectedLabels.size > 0){ clearSelection(); return; } // then: drop any chart selection
-  if(tableExpanded) setTableExpanded(false); // then: collapse the table if it's open
+  if(fsOverlay && !fsOverlay.hidden){ closeFullscreenChart(); return; }
+  if(tableExpanded) setTableExpanded(false);
 });
 
 /* ---------- theme handling with a swift circular transition from the toggle ---------- */
@@ -1558,7 +1612,11 @@ themeToggleEl.addEventListener('click', toggleTheme);
 themeToggleEl.addEventListener('keydown', (e)=>{
   if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleTheme(); }
 });
-document.getElementById('dateInput').addEventListener('change', renderForSelectedDate);
+document.getElementById('dateInput').addEventListener('change', ()=>{
+  const val = document.getElementById('dateInput').value;
+  followingToday = (val === isoOf(today()));
+  renderForSelectedDate();
+});
 
 // Triggers the 250ms-in/250ms-out breathe animation from the 'click' event
 // (fires on release) rather than :active, so a fast tap still plays the
