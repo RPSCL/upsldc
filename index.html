@@ -1341,16 +1341,33 @@ if(typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
 const CHART_PALETTE = ['#ff6b6b','#4dabf7','#51cf66','#f59f00','#cc5de8','#20c997','#ff922b','#5c7cfa','#ff8fa3','#66d9e8'];
 const SOLAR_COLOR = '#ffd43b';
 
+// "HH:MM" -> minutes since midnight, and back. Using real numeric minutes as
+// the x-value (instead of Chart.js's default category/index-based x-axis)
+// is what actually guarantees equal time gaps render as equal pixel gaps —
+// a category axis only spaces by array position, which looks uneven
+// whenever the underlying data isn't perfectly uniform everywhere.
+function minutesFromHHMM(t){
+  const parts = String(t).split(':');
+  return (parseInt(parts[0],10)||0) * 60 + (parseInt(parts[1],10)||0);
+}
+function formatMinutesAsHHMM(mins){
+  const m = Math.round(mins);
+  const h = Math.floor(m / 60);
+  const mm = ((m % 60) + 60) % 60;
+  return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+}
+
 function buildChartData(rowsForDate){
   const sorted = rowsForDate.slice().sort((a,b)=>
     (a[timeColIdx]||'').localeCompare(b[timeColIdx]||'', undefined, {numeric:true})
   );
   const labels = sorted.map(r => r[timeColIdx]);
+  const xValues = sorted.map(r => minutesFromHHMM(r[timeColIdx]));
   const agMetas = getAGSeriesMeta();
 
   const agDatasets = agMetas.map((m,i)=>({
     label: m.label,
-    data: sorted.map(r => parseFloat(r[m.idx])),
+    data: sorted.map((r,idx) => ({ x: xValues[idx], y: parseFloat(r[m.idx]) })),
     borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
     backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
     yAxisID: 'yAG',
@@ -1367,7 +1384,7 @@ function buildChartData(rowsForDate){
   if(solarIdx >= 0){
     datasets.push({
       label: 'Solar Gen',
-      data: sorted.map(r => parseFloat(r[solarIdx])),
+      data: sorted.map((r,idx) => ({ x: xValues[idx], y: parseFloat(r[solarIdx]) })),
       borderColor: SOLAR_COLOR,
       backgroundColor: SOLAR_COLOR,
       yAxisID: 'yAG',
@@ -1383,7 +1400,7 @@ function buildChartData(rowsForDate){
   if(demandIdx >= 0){
     datasets.push({
       label: 'Total Demand',
-      data: sorted.map(r => parseFloat(r[demandIdx])),
+      data: sorted.map((r,idx) => ({ x: xValues[idx], y: parseFloat(r[demandIdx]) })),
       borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
       backgroundColor: 'transparent',
       yAxisID: 'yDemand',
@@ -1397,6 +1414,7 @@ function buildChartData(rowsForDate){
   }
   return { labels, datasets };
 }
+
 
 function chartThemeColors(){
   const cs = getComputedStyle(document.documentElement);
@@ -1753,9 +1771,16 @@ function downloadChartAsHTML(){
     + '<div class="sub">' + selectedISO + '</div>'
     + '<div class="wrap"><canvas id="chart"></canvas></div>'
     + scriptOpen + '>'
+    + 'const exportOptions = ' + optionsJSON + ';'
+    + 'function formatMinutesAsHHMM(m){m=Math.round(m);const h=Math.floor(m/60);const mm=((m%60)+60)%60;return String(h).padStart(2,"0")+":"+String(mm).padStart(2,"0");}'
+    + 'function buildEquidistantTicksExport(axis,maxTicks){const min=axis.min,max=axis.max;if(!isFinite(min)||!isFinite(max)||max<=min)return;const span=Math.max(max-min,1);const candidates=[5,10,15,30,60,120,180,240,360,480,720,1440];let interval=candidates[candidates.length-1];for(const cnd of candidates){if(Math.floor(span/cnd)+1<=maxTicks){interval=cnd;break;}}const ticks=[];const firstTick=Math.ceil(min/interval)*interval;for(let v=firstTick;v<=max;v+=interval){ticks.push({value:v});}axis.ticks=ticks;}'
+    + 'exportOptions.scales.x.type="linear";'
+    + 'exportOptions.scales.x.ticks.callback=function(v){return formatMinutesAsHHMM(v);};'
+    + 'exportOptions.scales.x.afterBuildTicks=function(axis){return buildEquidistantTicksExport(axis,24);};'
+    + 'exportOptions.plugins.tooltip.callbacks={title:function(items){return items.length?formatMinutesAsHHMM(items[0].parsed.x):"";}};'
     + 'const crosshairPlugin={id:"crosshair",afterDraw(chart){const a=chart.tooltip&&chart.tooltip._active;if(!a||!a.length)return;const x=a[0].element.x;const ar=chart.chartArea;const ctx=chart.ctx;ctx.save();ctx.beginPath();ctx.moveTo(x,ar.top);ctx.lineTo(x,ar.bottom);ctx.lineWidth=1;ctx.strokeStyle="' + c.border + '";ctx.setLineDash([4,4]);ctx.stroke();ctx.restore();}};'
     + 'Chart.register(crosshairPlugin);'
-    + 'new Chart(document.getElementById("chart").getContext("2d"),{type:"line",data:' + dataJSON + ',options:' + optionsJSON + '});'
+    + 'new Chart(document.getElementById("chart").getContext("2d"),{type:"line",data:' + dataJSON + ',options:exportOptions});'
     + scriptClose
     + '</body></html>';
 
@@ -1792,29 +1817,27 @@ window.addEventListener('focus', () => { if(liveChart || fullscreenChart) syncCh
 // forceLegend: overrides whether Chart.js draws its own built-in legend.
 // Left undefined, it defaults to compact — i.e. the native legend only shows
 // on mobile, since desktop uses the custom DOM legend next to the title
-// instead. Fullscreen and exports always force it true, since neither has
-// that DOM legend available to fall back on.
-// Picks a clean, round time interval (5/10/15/30/60/120min etc.) so the
-// x-axis shows genuinely equidistant timestamps instead of Chart.js's
-// default index-based auto-skip, which can look uneven when the underlying
-// data has gaps. Snaps to whichever candidate keeps the tick count at or
-// under maxTicks, always keeping the first/last data point's tick.
-function filterTicksToEquidistantInterval(axis, maxTicks){
-  const labels = axis.chart.data.labels || [];
-  if(!axis.ticks || axis.ticks.length === 0 || labels.length === 0) return;
-  const toMinutes = (t)=>{
-    const parts = String(t).split(':');
-    return (parseInt(parts[0],10)||0) * 60 + (parseInt(parts[1],10)||0);
-  };
-  const tickMinutes = axis.ticks.map(t => toMinutes(labels[t.value]));
-  const span = Math.max(tickMinutes[tickMinutes.length - 1] - tickMinutes[0], 1);
+// Picks a clean, round time interval (5/10/15/30/60/120min etc.) and
+// generates ticks directly at exact multiples of it across the axis's real
+// numeric range. Because the x-axis is now a genuine linear scale (see
+// buildChartData), equal steps in this value space are *guaranteed* equal
+// pixel steps — unlike a category/index axis, which only looks even when
+// the underlying data happens to be perfectly uniform everywhere.
+function buildEquidistantTicks(axis, maxTicks){
+  const min = axis.min, max = axis.max;
+  if(!isFinite(min) || !isFinite(max) || max <= min) return;
+  const span = Math.max(max - min, 1);
   const candidates = [5,10,15,30,60,120,180,240,360,480,720,1440];
   let interval = candidates[candidates.length - 1];
   for(const c of candidates){
     if(Math.floor(span / c) + 1 <= maxTicks){ interval = c; break; }
   }
-  const base = tickMinutes[0];
-  axis.ticks = axis.ticks.filter((t,i) => (tickMinutes[i] - base) % interval === 0);
+  const ticks = [];
+  const firstTick = Math.ceil(min / interval) * interval;
+  for(let v = firstTick; v <= max; v += interval){
+    ticks.push({ value: v });
+  }
+  axis.ticks = ticks;
 }
 
 function buildChartOptions(forceCompact, forceLegend){
@@ -1855,13 +1878,17 @@ function buildChartOptions(forceCompact, forceLegend){
         borderWidth:1,
         padding:10,
         filter:(item)=> selectedLabels.size === 0 || selectedLabels.has(item.dataset.label),
+        callbacks:{
+          title:(items)=> items.length ? formatMinutesAsHHMM(items[0].parsed.x) : ''
+        }
       }
     },
     scales:{
       x:{
-        ticks:{ color:c.muted, maxRotation:0, autoSkip:false, font:{ size: compact ? 9 : 11 } },
+        type:'linear',
+        ticks:{ color:c.muted, maxRotation:0, font:{ size: compact ? 9 : 11 }, callback:(v)=>formatMinutesAsHHMM(v) },
         grid:{ color:c.border },
-        afterBuildTicks: (axis) => filterTicksToEquidistantInterval(axis, compact ? 10 : 24)
+        afterBuildTicks: (axis) => buildEquidistantTicks(axis, compact ? 10 : 24)
       },
       yAG:{
         position:'left',
