@@ -803,6 +803,7 @@
     .chart-section-head{ gap:8px; }
     .chart-section-head h2{ font-size:13px; }
     .date-nav input[type="date"]{ width:148px; font-size:12.5px; padding:6px 32px 6px 12px; }
+    .row-copy-col{ display:none; } /* row-level copy is web/desktop only */
   }
 </style>
 </head>
@@ -1137,10 +1138,11 @@ function setTableExpanded(expanded){
   document.getElementById('tableBodyWrap').hidden = !expanded;
   document.getElementById('tableToggleBtn').setAttribute('aria-expanded', expanded ? 'true' : 'false');
   updateFloatingButtonsVisibility();
-  if(expanded){
+  if(expanded && !isPhonePortrait()){
     // jump straight to the newest reading — both the page itself (so the
     // now-tall table is actually in view) and the table's own internal
     // scroll area (so its bottom-most row, the latest one, is what's shown)
+    // — desktop/web only; on phone the table just expands in place
     requestAnimationFrame(() => {
       const tw = document.querySelector('.table-wrap');
       if(tw) tw.scrollTop = tw.scrollHeight;
