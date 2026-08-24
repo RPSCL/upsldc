@@ -154,6 +154,22 @@ def prepare_csv():
 def fetch_json(url):
     last_error = None
 
+    # try the direct URL first, up to 3 times — this is the one that
+    # actually works from this box, so we hit it before wasting time on proxies
+    for attempt in range(3):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=20)
+            resp.raise_for_status()
+            return resp.json()
+
+        except Exception as e:
+            last_error = e
+            print(f"Direct fetch attempt {attempt + 1}/3 failed for {url}: {e}")
+            time.sleep(2)
+
+    # only fall back to proxies if all 3 direct attempts failed
+    print(f"Direct fetch failed 3x, falling back to proxies for {url}")
+
     for template in PROXY_URL_TEMPLATES:
         proxied_url = template.format(target=quote(url, safe=""))
 
@@ -165,14 +181,6 @@ def fetch_json(url):
         except Exception as e:
             last_error = e
             time.sleep(2)
-
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=20)
-        resp.raise_for_status()
-        return resp.json()
-
-    except Exception as e:
-        last_error = e
 
     raise RuntimeError(f"All fetch attempts failed for {url}: {last_error}")
 
@@ -289,16 +297,39 @@ def append_row(row):
 
 def send_to_telegram(row):
     headers = header_row()
-    message = "📊 UPSLDC New Data\n\n"
+    row_dict = dict(zip(headers, row))
 
-    for column, value in zip(headers, row):
-        message += f"{column}: {value}\n"
+    date_str = row_dict["Date"]
+    time_str = row_dict["Time"]
+    demand = row_dict["TOTAL_DEMAND"]
+    solar = row_dict["SOLAR_GEN"]
+
+    # only AG (actual generation) per plant, plant name padded to align the column
+    name_width = max(len(key) for key in PLANT_SEQUENCE)
+
+    table_lines = []
+    for key in PLANT_SEQUENCE:
+        ag_value = row_dict[f"{key}_AG"]
+        table_lines.append(f"{key.ljust(name_width)}  {str(ag_value).rjust(5)}")
+
+    table_body = "\n".join(table_lines)
+
+    message = (
+        f"📊 UPSLDC Data — {date_str} {time_str}\n"
+        f"Demand: {demand} MW   Solar: {solar} MW\n\n"
+        f"```\n"
+        f"{'Plant'.ljust(name_width)}  {'AG'.rjust(5)}\n"
+        f"{'-' * (name_width + 7)}\n"
+        f"{table_body}\n"
+        f"```"
+    )
 
     telegram_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 
     payload = {
         "chat_id": TST_ID,
-        "text": message
+        "text": message,
+        "parse_mode": "Markdown"  # renders the ``` block as monospace on Telegram
     }
 
     try:
