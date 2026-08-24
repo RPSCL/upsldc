@@ -427,7 +427,7 @@
     border-bottom:1px solid var(--border);
     white-space:nowrap;
   }
-  th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){
+  th:nth-child(2),td:nth-child(2),th:nth-child(3),td:nth-child(3){
     text-align:left;
   }
   th{
@@ -441,6 +441,43 @@
     background:var(--panel);
   }
   tbody tr:hover td{ background:var(--panel-2); }
+
+  /* row-level copy icon: sticky to the left edge so it survives horizontal
+     scroll, very faint by default, sharpens up on hover/press, briefly turns
+     green after a successful copy */
+  .row-copy-col{
+    position:sticky;
+    left:0;
+    width:28px;
+    padding:6px 4px;
+    text-align:center !important;
+    background:var(--panel);
+    z-index:1;
+  }
+  th.row-copy-col{ z-index:3; }
+  tbody tr:hover .row-copy-col{ background:var(--panel-2); }
+  .row-copy-btn{
+    width:16px;
+    height:16px;
+    padding:0;
+    border:none;
+    background:none;
+    color:var(--muted);
+    opacity:.28;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    transition:opacity .15s ease, color .15s ease;
+  }
+  .row-copy-btn svg{ width:12px; height:12px; }
+  .row-copy-btn:focus-visible{ opacity:1; }
+  @media (hover:hover) and (pointer:fine){
+    .row-copy-btn:hover{ opacity:1; }
+  }
+  .row-copy-btn:active{ opacity:1; }
+  .row-copy-btn.copied{ opacity:1; color:#3ecf7e; }
+
   td.rosa-total, th.rosa-total{
     color:var(--accent);
     font-weight:700;
@@ -1164,18 +1201,21 @@ function renderForSelectedDate(){
     ? displayHeader
     : displayHeader.slice(0, insertAfterIdx + 1).concat(['Rosa Total DC','Rosa Total SG','Rosa Total AG'], displayHeader.slice(insertAfterIdx + 1));
 
-  headRow.innerHTML = fullHeader.map((h,i)=>{
+  headRow.innerHTML = '<th class="row-copy-col"></th>' + fullHeader.map((h,i)=>{
     const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
     return `<th${isRosaTotal ? ' class="rosa-total"' : ''}>${h}</th>`;
   }).join('');
 
+  const rowCopyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
   bodyRows.innerHTML = sorted.map(raw=>{
     const cells = addRosaTotals(raw);
+    const rowText = cells.join('\t').replace(/"/g, '&quot;');
+    const copyCell = `<td class="row-copy-col"><button type="button" class="row-copy-btn" data-row-text="${rowText}" aria-label="Copy row">${rowCopyIcon}</button></td>`;
     const tds = cells.map((c,i)=>{
       const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
       return `<td${isRosaTotal ? ' class="rosa-total"' : ''}>${c}</td>`;
     }).join('');
-    return `<tr>${tds}</tr>`;
+    return `<tr>${copyCell}${tds}</tr>`;
   }).join('');
 
   currentRawCSVForDate = [rawHeader.join(',')].concat(sorted.map(r=>r.join(','))).join('\n');
@@ -1528,7 +1568,11 @@ function initOrUpdateLiveChart(rowsForDate){
     const ctx = document.getElementById('liveChartCanvas').getContext('2d');
     liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
     updateResetButtonVisibility();
+    // two follow-up resizes: the layout may not have fully settled on the
+    // very first paint (slow/cold loads), so a single quick check isn't
+    // always enough — this costs nothing if the first one was already right
     setTimeout(() => liveChart && liveChart.resize(), 60);
+    setTimeout(() => liveChart && liveChart.resize(), 400);
   } else {
     const { labels, datasets } = buildTaggedDatasets(rowsForDate);
     mergeDataIntoChart(liveChart, labels, datasets);
@@ -1707,6 +1751,16 @@ function closeDownloadOptions(){
 
 window.addEventListener('resize', () => { if(liveChart || fullscreenChart) syncChartLayout(); });
 window.addEventListener('orientationchange', () => { if(liveChart || fullscreenChart) syncChartLayout(); });
+// A canvas measured while the tab is backgrounded (or the page is restored
+// from bfcache after sitting idle) can bake in a stale/near-zero size that
+// Chart.js never revisits on its own — force a fresh resize whenever the
+// page becomes visible/active again, which is what fixes the "tiny chart in
+// the corner" bug after reopening the browser later.
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && (liveChart || fullscreenChart)) syncChartLayout();
+});
+window.addEventListener('pageshow', () => { if(liveChart || fullscreenChart) syncChartLayout(); });
+window.addEventListener('focus', () => { if(liveChart || fullscreenChart) syncChartLayout(); });
 
 // forceCompact: pass true/false to override device detection (used for PNG export,
 // which always renders desktop-style regardless of the device it's downloaded from).
@@ -1803,6 +1857,26 @@ document.getElementById('downloadOptionsOverlay').addEventListener('click', (e)=
 document.getElementById('chartLegendRow').addEventListener('click', (e)=>{
   const chip = e.target.closest('.legend-chip');
   if(chip) toggleSelection(chip.dataset.label);
+});
+document.getElementById('bodyRows').addEventListener('click', async (e)=>{
+  const btn = e.target.closest('.row-copy-btn');
+  if(!btn) return;
+  const text = btn.dataset.rowText || '';
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch(err){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try{ document.execCommand('copy'); }catch(e2){ /* give up silently */ }
+    ta.remove();
+  }
+  btn.classList.add('copied');
+  clearTimeout(btn._copyTimeout);
+  btn._copyTimeout = setTimeout(() => btn.classList.remove('copied'), 900);
 });
 // Anywhere outside the plot itself — the header, the page background, either
 // overlay's chrome, or even the axis/scale label gutters *within* the canvas —
