@@ -209,17 +209,9 @@
     border:1px solid var(--border);
     border-radius:16px;
     padding:16px;
-    margin-bottom:18px;
+    margin-bottom:14px;
     box-shadow:var(--shadow);
   }
-  .controls-row{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    flex-wrap:wrap;
-    gap:14px;
-  }
-  .btn-group{ display:flex; gap:10px; flex-wrap:wrap; }
 
   /* ---------- buttons: neutral surface, motion-driven feedback ---------- */
   button.action{
@@ -260,17 +252,16 @@
     box-shadow:none;
   }
 
-  /* floating copy button: anchored inside the table panel's own bottom-right
-     corner (not the viewport), semi-transparent until interacted with; soft
-     fade between the icon and a green checkmark on success, both ways —
-     Claude-style copy confirmation */
+  /* floating icon buttons (Download CSV, Copy): anchored inside the table
+     panel's own bottom-right corner (not the viewport), semi-transparent
+     until interacted with, stacked vertically. Copy additionally fades to a
+     green checkmark on success — soft in, soft out. */
   .table-panel{ position:relative; }
-  .floating-copy-btn{
+  .floating-btn{
     position:absolute;
-    right:81px;
-    bottom:36px;
-    width:46px;
-    height:46px;
+    right:16px;
+    width:42px;
+    height:42px;
     border-radius:999px;
     border:1px solid var(--border);
     background:var(--panel);
@@ -285,13 +276,17 @@
     align-items:center;
     justify-content:center;
   }
-  .floating-copy-btn:focus-visible{ opacity:1; }
+  .floating-btn svg{ width:16px; height:16px; }
+  #copyBtn.floating-btn{ bottom:16px; }
+  #downloadBtn.floating-btn{ bottom:68px; }
+  .floating-btn:focus-visible{ opacity:1; }
   @media (hover:hover) and (pointer:fine){
-    .floating-copy-btn:hover{ opacity:1; border-color:var(--accent); transform:translateY(-2px); }
+    .floating-btn:hover{ opacity:1; border-color:var(--accent); transform:translateY(-2px); }
   }
-  .floating-copy-btn:active{ opacity:1; border-color:var(--accent); }
-  .floating-copy-btn .btn-label,
-  .floating-copy-btn .btn-check{
+  .floating-btn:active{ opacity:1; border-color:var(--accent); }
+  .floating-btn:disabled{ opacity:.25; cursor:not-allowed; transform:none; }
+  .floating-btn .btn-label,
+  .floating-btn .btn-check{
     position:absolute;
     inset:0;
     display:flex;
@@ -299,28 +294,28 @@
     justify-content:center;
     transition:opacity .28s ease;
   }
-  .floating-copy-btn .btn-check{ color:#3ecf7e; opacity:0; pointer-events:none; }
-  .floating-copy-btn.copied .btn-label{ opacity:0; }
-  .floating-copy-btn.copied .btn-check{ opacity:1; }
+  .floating-btn .btn-check{ color:#3ecf7e; opacity:0; pointer-events:none; }
+  .floating-btn.copied .btn-label{ opacity:0; }
+  .floating-btn.copied .btn-check{ opacity:1; }
   @media (max-width:640px){
-    .floating-copy-btn{ display:none; } /* clipboard copy is desktop/web-view only */
+    #copyBtn.floating-btn{ display:none; } /* clipboard copy is desktop/web-view only */
   }
 
-  /* date selector */
+  /* ---------- compact date nav (lives in the chart section header) ---------- */
   .date-nav{
     display:flex;
     align-items:center;
-    gap:8px;
+    gap:6px;
     flex:0 0 auto;
   }
   .date-nav button.arrow{
-    width:34px;
-    height:34px;
+    width:26px;
+    height:26px;
     border-radius:999px;
     border:1px solid var(--border);
     background:var(--panel-2);
     color:var(--text);
-    font-size:15px;
+    font-size:13px;
     cursor:pointer;
     display:flex;
     align-items:center;
@@ -336,7 +331,7 @@
     .date-nav button.arrow:hover:not(:disabled){
       border-color:var(--accent);
       color:var(--accent);
-      transform:translateY(-2px) scale(1.08);
+      transform:translateY(-1px) scale(1.08);
     }
   }
   .date-nav button.arrow:disabled{
@@ -346,17 +341,23 @@
     color:var(--muted);
     transform:none;
   }
+  .date-input-wrap{
+    position:relative;
+    display:inline-flex;
+    align-items:center;
+  }
   .date-nav input[type="date"]{
     background:var(--panel-2);
     border:1px solid var(--border);
     color:var(--text);
     border-radius:999px;
-    padding:7px 38px 7px 14px;
-    font-size:13px;
+    padding:5px 30px 5px 10px;
+    font-size:11.5px;
     font-family:inherit;
     color-scheme: dark;
     -webkit-appearance:none;
     appearance:none;
+    width:112px;
   }
   html[data-theme="light"] .date-nav input[type="date"]{ color-scheme: light; }
   /* fully suppress the browser's own indicator (which can render as a plain
@@ -366,7 +367,7 @@
   .date-nav input[type="date"]::-webkit-calendar-picker-indicator{
     position:absolute;
     right:0; top:0;
-    width:38px; height:100%;
+    width:30px; height:100%;
     margin:0;
     padding:0;
     background:transparent;
@@ -375,23 +376,16 @@
     opacity:0;
     cursor:pointer;
   }
-  .date-input-wrap{
-    position:relative;
-    display:inline-flex;
-    align-items:center;
-  }
   .date-input-wrap .date-icon{
     position:absolute;
-    right:13px;
+    right:10px;
     top:50%;
     transform:translateY(-50%);
-    width:16px;
-    height:16px;
+    width:13px;
+    height:13px;
     color:var(--muted);
     pointer-events:none;
   }
-
-  .status{ color:var(--muted); font-size:12px; margin-top:10px; }
 
   /* ---------- table ---------- */
   .table-wrap{
@@ -442,10 +436,6 @@
     color:var(--accent);
     font-weight:700;
   }
-  tr.missing-row td{
-    background:var(--panel-2);
-    color:var(--muted);
-  }
   .empty-state{
     padding:34px 16px;
     text-align:center;
@@ -453,47 +443,65 @@
     font-size:13px;
   }
 
-  /* ---------- live chart overlay ---------- */
-  .chart-overlay{
-    position:fixed;
-    inset:0;
-    background:rgba(0,0,0,.5);
+  /* ---------- collapsible table panel ---------- */
+  .table-toggle{
+    width:100%;
+    background:none;
+    border:none;
+    padding:0;
+    margin:0;
     display:flex;
     align-items:center;
-    justify-content:center;
-    padding:24px;
-    z-index:100;
+    justify-content:space-between;
+    gap:10px;
+    cursor:pointer;
+    color:var(--text);
   }
-  .chart-overlay[hidden]{ display:none; }
-  .chart-panel{
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:18px;
-    box-shadow:var(--shadow);
-    width:min(1150px, 100%);
-    max-height:92vh;
-    display:flex;
-    flex-direction:column;
-    gap:12px;
-    padding:18px 20px 20px;
+  .table-toggle .table-toggle-label{
+    font-size:13px;
+    font-weight:700;
   }
-  .chart-panel-head{
+  .table-toggle .table-toggle-sub{
+    color:var(--muted);
+    font-size:11.5px;
+    font-weight:400;
+    margin-left:8px;
+  }
+  .table-toggle .chevron-icon{
+    width:16px;
+    height:16px;
+    color:var(--muted);
+    transition:transform .2s ease;
+    flex:0 0 auto;
+  }
+  .table-toggle[aria-expanded="true"] .chevron-icon{ transform:rotate(180deg); }
+  .table-toggle:active .chevron-icon{ color:var(--accent); }
+  @media (hover:hover) and (pointer:fine){
+    .table-toggle:hover .chevron-icon{ color:var(--accent); }
+  }
+  #tableBodyWrap{ margin-top:14px; }
+  #tableBodyWrap[hidden]{ display:none; }
+
+  /* ---------- live chart section (always visible, inline — not a modal) ---------- */
+  .chart-section-head{
     display:flex;
     align-items:center;
     justify-content:space-between;
     gap:12px;
+    flex-wrap:wrap;
+    margin-bottom:12px;
   }
-  .chart-panel-head h2{ margin:0; font-size:16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .chart-panel-head .chart-sub{ color:var(--muted); font-size:12px; margin-top:2px; white-space:nowrap; }
+  .chart-section-head h2{ margin:0; font-size:15px; }
+  .chart-section-head .chart-sub{ color:var(--muted); font-size:11.5px; margin-top:1px; }
   .chart-head-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
   .chart-close, .chart-download, .chart-reset{
-    width:32px;
-    height:32px;
+    width:30px;
+    height:30px;
     border-radius:999px;
     border:1px solid var(--border);
     background:var(--panel-2);
     color:var(--text);
-    font-size:16px;
+    font-size:15px;
     cursor:pointer;
     display:flex;
     align-items:center;
@@ -502,40 +510,33 @@
     transition:border-color .15s ease, color .15s ease;
     padding:0;
   }
-  .chart-download svg, .chart-reset svg{ width:15px; height:15px; }
+  .chart-download svg, .chart-reset svg{ width:14px; height:14px; }
   .chart-close:active, .chart-download:active, .chart-reset:active{ border-color:var(--accent); color:var(--accent); }
   @media (hover:hover) and (pointer:fine){
     .chart-close:hover, .chart-download:hover, .chart-reset:hover{ border-color:var(--accent); color:var(--accent); }
   }
   .chart-canvas-wrap{
     position:relative;
-    flex:1 1 auto;
-    min-height:0;
-    height:min(60vh, 520px);
+    height:min(52vh, 460px);
   }
   @media (max-width:640px){
-    /* true edge-to-edge fullscreen on mobile — no rotation, no vh/vw tricks.
-       Flexbox with height:100%/flex:1 fills whatever space is actually
-       available, which sidesteps the mobile viewport-unit issues entirely. */
-    .chart-overlay{ padding:0; align-items:stretch; justify-content:stretch; }
-    .chart-panel{
-      width:100%;
-      height:100%;
-      max-height:none;
-      border-radius:0;
-      padding:10px 12px;
-      gap:8px;
-    }
-    .chart-panel-head h2{ font-size:13px; }
-    .chart-panel-head .chart-sub{ display:none; }
-    .chart-close, .chart-download, .chart-reset{ width:30px; height:30px; }
-    .chart-canvas-wrap{ height:auto; flex:1 1 auto; }
+    .chart-canvas-wrap{ height:46vh; }
+    .chart-section-head .chart-sub{ display:none; }
   }
 
-  /* ---------- mobile: single-row header, single-row controls ---------- */
+  /* ---------- footer ---------- */
+  .site-footer{
+    text-align:center;
+    color:var(--text);
+    opacity:.3;
+    font-size:12px;
+    padding:22px 0 4px;
+  }
+
+  /* ---------- mobile: compact header, compact chart header ---------- */
   @media (max-width:640px){
     body{ padding:14px 12px 26px; }
-    .topbar{ flex-wrap:nowrap; gap:10px; margin-bottom:16px; }
+    .topbar{ flex-wrap:nowrap; gap:10px; margin-bottom:14px; }
     .brand{ gap:8px; flex:1 1 auto; }
     .logo-wrap svg{ width:88px; height:27px; }
     .brand-text h1{ font-size:13.5px; text-align:center; }
@@ -546,21 +547,9 @@
     html[data-theme="dark"] .theme-toggle .thumb{ transform:translateX(24px); }
 
     .panel{ padding:12px; border-radius:14px; }
-    .controls-row{
-      flex-direction:column;
-      align-items:stretch;
-      flex-wrap:nowrap;
-      gap:10px;
-    }
-    .btn-group{
-      width:100%;
-      flex-wrap:nowrap;
-      gap:8px;
-    }
-    .btn-group button.action{ flex:1 1 0; padding:10px 6px; font-size:11.5px; white-space:nowrap; text-align:center; }
-    .date-nav{ width:100%; flex-wrap:nowrap; justify-content:center; }
-    .date-input-wrap{ flex:1 1 auto; }
-    .date-nav input[type="date"]{ width:100%; padding:8px 34px 8px 10px; font-size:12.5px; min-height:36px; text-align:center; }
+    .chart-section-head{ gap:8px; }
+    .chart-section-head h2{ font-size:13px; }
+    .date-nav input[type="date"]{ width:94px; font-size:11px; }
   }
 </style>
 </head>
@@ -587,79 +576,88 @@
   </div>
 </div>
 
-<div class="panel">
-  <div class="controls-row">
-    <div class="btn-group">
-      <button class="action" onclick="loadData()"><span class="btn-label">Refresh</span></button>
-      <button class="action" id="downloadBtn" onclick="downloadCSV()"><span class="btn-label">Download CSV</span></button>
-      <button class="action" onclick="openLiveChart()"><span class="btn-label">Live Chart</span></button>
+<div class="panel" id="chartPanel">
+  <div class="chart-section-head">
+    <div>
+      <h2>Live Chart</h2>
+      <div class="chart-sub" id="chartSub"></div>
     </div>
-    <div class="date-nav">
-      <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
-      <span class="date-input-wrap">
-        <input type="date" id="dateInput" min="2026-08-23">
-        <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4.5" width="18" height="16" rx="2.5"/>
-          <path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>
+    <div class="chart-head-actions">
+      <div class="date-nav">
+        <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
+        <span class="date-input-wrap">
+          <input type="date" id="dateInput" min="2026-08-23">
+          <svg class="date-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4.5" width="18" height="16" rx="2.5"/>
+            <path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>
+          </svg>
+        </span>
+        <button class="arrow" id="nextDay" onclick="stepDate(1)" aria-label="Next day">&#8250;</button>
+      </div>
+      <button class="chart-reset" id="chartResetBtn" aria-label="Reset chart selection" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7"/>
+          <path d="M3 4v5h5"/>
         </svg>
-      </span>
-      <button class="arrow" id="nextDay" onclick="stepDate(1)" aria-label="Next day">&#8250;</button>
+      </button>
+      <button class="chart-download" id="chartDownloadBtn" aria-label="Download chart as PNG">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v13"/>
+          <path d="M7 11l5 5 5-5"/>
+          <path d="M4 20h16"/>
+        </svg>
+      </button>
     </div>
   </div>
-  <div class="status" id="status">Loading...</div>
+  <div class="chart-canvas-wrap">
+    <canvas id="liveChartCanvas"></canvas>
+  </div>
 </div>
 
 <div class="panel table-panel">
-  <div class="table-wrap">
-    <table id="dataTable">
-      <thead><tr id="headRow"></tr></thead>
-      <tbody id="bodyRows"></tbody>
-    </table>
-  </div>
-  <button class="floating-copy-btn" id="copyBtn" onclick="copyTableToClipboard(this)" aria-label="Copy table" title="Copy table" style="display:none;">
-    <span class="btn-label" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="8" y="8" width="12" height="12" rx="2"/>
-        <path d="M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>
-      </svg>
+  <button class="table-toggle" id="tableToggleBtn" onclick="toggleTableExpanded()" aria-expanded="false" aria-controls="tableBodyWrap">
+    <span>
+      <span class="table-toggle-label">Data Table</span>
+      <span class="table-toggle-sub" id="tableToggleSub"></span>
     </span>
-    <span class="btn-check" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M6 12.5l4 4 8-9"/>
-      </svg>
-    </span>
+    <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 9l6 6 6-6"/>
+    </svg>
   </button>
+  <div id="tableBodyWrap" hidden>
+    <div class="table-wrap">
+      <table id="dataTable">
+        <thead><tr id="headRow"></tr></thead>
+        <tbody id="bodyRows"></tbody>
+      </table>
+    </div>
+    <button class="floating-btn" id="downloadBtn" onclick="downloadCSV()" aria-label="Download CSV" title="Download CSV" style="display:none;">
+      <span class="btn-label" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3v13"/>
+          <path d="M7 11l5 5 5-5"/>
+          <path d="M4 20h16"/>
+        </svg>
+      </span>
+    </button>
+    <button class="floating-btn" id="copyBtn" onclick="copyTableToClipboard(this)" aria-label="Copy table" title="Copy table" style="display:none;">
+      <span class="btn-label" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="8" y="8" width="12" height="12" rx="2"/>
+          <path d="M5 16H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>
+        </svg>
+      </span>
+      <span class="btn-check" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 12.5l4 4 8-9"/>
+        </svg>
+      </span>
+    </button>
+  </div>
 </div>
 
-<div class="chart-overlay" id="chartOverlay" hidden>
-  <div class="chart-panel" role="dialog" aria-modal="true" aria-label="Live chart">
-    <div class="chart-panel-head">
-      <div>
-        <h2>Live Chart — Actual Generation</h2>
-        <div class="chart-sub" id="chartSub"></div>
-      </div>
-      <div class="chart-head-actions">
-        <button class="chart-reset" id="chartResetBtn" aria-label="Reset chart selection" style="display:none;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 12a9 9 0 1 0 3-6.7"/>
-            <path d="M3 4v5h5"/>
-          </svg>
-        </button>
-        <button class="chart-download" id="chartDownloadBtn" aria-label="Download chart as PNG">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 3v13"/>
-            <path d="M7 11l5 5 5-5"/>
-            <path d="M4 20h16"/>
-          </svg>
-        </button>
-        <button class="chart-close" id="chartCloseBtn" aria-label="Close chart">&#10005;</button>
-      </div>
-    </div>
-    <div class="chart-canvas-wrap">
-      <canvas id="liveChartCanvas"></canvas>
-    </div>
-  </div>
-</div>
+<div class="site-footer">designed by 41009953</div>
+
 
 <script>
 /* Chart.js, bundled inline so the live chart works with no external network calls */
@@ -731,8 +729,6 @@ function isoOf(d){
 }
 
 async function loadData(silent){
-  const status = document.getElementById('status');
-  if(!silent) status.textContent = 'Loading...';
   try{
     const res = await fetch(CSV_PATH + '?t=' + Date.now());
     if(!res.ok) throw new Error('HTTP ' + res.status);
@@ -753,10 +749,8 @@ async function loadData(silent){
       dateInput.value = isoOf(defaultDate);
     }
     renderForSelectedDate();
-    status.textContent = 'Last refreshed ' + new Date().toLocaleTimeString();
   }catch(err){
     // stay silent — no CSV yet is a normal, expected state, not an error to surface
-    status.textContent = '';
     document.getElementById('downloadBtn').disabled = true;
     document.getElementById('bodyRows').innerHTML = '';
     document.getElementById('headRow').innerHTML = '';
@@ -805,6 +799,26 @@ function stepDate(delta){
   renderForSelectedDate();
 }
 
+let lastRowCount = 0;
+let tableExpanded = false;
+
+function setTableExpanded(expanded){
+  tableExpanded = expanded;
+  document.getElementById('tableBodyWrap').hidden = !expanded;
+  document.getElementById('tableToggleBtn').setAttribute('aria-expanded', expanded ? 'true' : 'false');
+  updateFloatingButtonsVisibility();
+}
+function toggleTableExpanded(){ setTableExpanded(!tableExpanded); }
+
+// Copy only makes sense once there's a meaningful amount of data; Download CSV
+// and Copy both only show once the table itself is actually expanded.
+function updateFloatingButtonsVisibility(){
+  const copyBtn = document.getElementById('copyBtn');
+  const dlBtn = document.getElementById('downloadBtn');
+  if(copyBtn) copyBtn.style.display = (tableExpanded && lastRowCount > 4) ? '' : 'none';
+  if(dlBtn) dlBtn.style.display = tableExpanded ? '' : 'none';
+}
+
 function renderForSelectedDate(){
   const input = document.getElementById('dateInput');
   const sel = input.valueAsDate;
@@ -822,15 +836,18 @@ function renderForSelectedDate(){
   const headRow = document.getElementById('headRow');
   const bodyRows = document.getElementById('bodyRows');
   const downloadBtn = document.getElementById('downloadBtn');
-  const status = document.getElementById('status');
+  const chartSub = document.getElementById('chartSub');
+  const tableToggleSub = document.getElementById('tableToggleSub');
 
   if(rowsForDate.length === 0){
     headRow.innerHTML = '';
     bodyRows.innerHTML = '<tr><td class="empty-state" colspan="1">No data logged for this date yet.</td></tr>';
     downloadBtn.disabled = true;
     currentRawCSVForDate = '';
-    status.textContent = 'No data logged for ' + selectedISO + ' yet.';
-    updateCopyButtonVisibility(0);
+    lastRowCount = 0;
+    if(chartSub) chartSub.textContent = selectedISO + ' — no data yet';
+    if(tableToggleSub) tableToggleSub.textContent = selectedISO + ' — no data yet';
+    updateFloatingButtonsVisibility();
     return;
   }
 
@@ -861,16 +878,12 @@ function renderForSelectedDate(){
   currentRawCSVForDate = [rawHeader.join(',')].concat(sorted.map(r=>r.join(','))).join('\n');
 
   downloadBtn.disabled = false;
-  status.textContent = 'Loaded ' + sorted.length + ' logged reading(s) for ' + selectedISO + '.';
-  updateCopyButtonVisibility(sorted.length);
+  lastRowCount = sorted.length;
+  if(chartSub) chartSub.textContent = selectedISO + ' — ' + sorted.length + ' reading(s)';
+  if(tableToggleSub) tableToggleSub.textContent = selectedISO + ' — ' + sorted.length + ' reading(s)';
+  updateFloatingButtonsVisibility();
 
-  updateLiveChartIfOpen(rowsForDate);
-}
-
-// only worth offering a one-click copy once there's a meaningful amount of data
-function updateCopyButtonVisibility(rowCount){
-  const btn = document.getElementById('copyBtn');
-  if(btn) btn.style.display = rowCount > 4 ? '' : 'none';
+  initOrUpdateLiveChart(rowsForDate);
 }
 
 function downloadCSV(){
@@ -926,7 +939,7 @@ async function copyTableToClipboard(btn){
 
 /* ---------- live chart: all *_AG series vs time, Total Demand on its own scale ---------- */
 let liveChart = null;
-let chartOverlayOpen = false;
+let lastChartISO = null;
 let selectedLabels = new Set();
 
 function getAGSeriesMeta(){
@@ -1097,30 +1110,41 @@ function syncChartLayout(){
   }
 }
 
-function openLiveChart(){
-  const rowsForDate = currentRowsForSelectedDate();
-  if(rowsForDate.length === 0){ alert('No data to chart for this date yet.'); return; }
-  if(typeof Chart === 'undefined'){ alert('Chart library failed to load — check your connection and try again.'); return; }
+// The chart is now always visible inline on the page (not a modal) — this
+// creates it once on first data, then just updates it in place on every
+// subsequent render (date change, live 60s refresh, etc).
+function initOrUpdateLiveChart(rowsForDate){
+  if(rowsForDate.length === 0) return; // nothing to plot for this date yet
+  if(typeof Chart === 'undefined') return; // library not ready yet; will retry on next render
+
+  const dateChanged = lastChartISO !== selectedISO;
+  lastChartISO = selectedISO;
 
   const { labels, datasets } = buildChartData(rowsForDate);
-  datasets.forEach(tagOriginalStyle);
-  selectedLabels = new Set(); // start each opening unfiltered
 
-  const ctx = document.getElementById('liveChartCanvas').getContext('2d');
-  if(liveChart) liveChart.destroy();
-  liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
+  if(!liveChart){
+    datasets.forEach(tagOriginalStyle);
+    selectedLabels = new Set();
+    const ctx = document.getElementById('liveChartCanvas').getContext('2d');
+    liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
+    updateResetButtonVisibility();
+    setTimeout(() => liveChart && liveChart.resize(), 60);
+    return;
+  }
 
-  document.getElementById('chartSub').textContent = selectedISO;
-  document.getElementById('chartOverlay').hidden = false;
-  chartOverlayOpen = true;
+  if(dateChanged) selectedLabels = new Set(); // a new day's chart starts unfiltered
+  liveChart.data.labels = labels;
+  datasets.forEach((ds,i)=>{
+    if(liveChart.data.datasets[i]){
+      liveChart.data.datasets[i].data = ds.data;
+    } else {
+      tagOriginalStyle(ds);
+      liveChart.data.datasets[i] = ds;
+    }
+  });
+  liveChart.data.datasets.length = datasets.length;
+  applySelectionStyling(); // re-applies current selection/dimming on top of the fresh data
   updateResetButtonVisibility();
-  setTimeout(() => liveChart && liveChart.resize(), 60);
-}
-
-function closeLiveChart(){
-  document.getElementById('chartOverlay').hidden = true;
-  chartOverlayOpen = false;
-  selectedLabels = new Set();
 }
 
 // Fills the canvas with a solid theme-matching background before Chart.js
@@ -1195,8 +1219,8 @@ function downloadChartPNG(){
   }
 }
 
-window.addEventListener('resize', () => { if(chartOverlayOpen) syncChartLayout(); });
-window.addEventListener('orientationchange', () => { if(chartOverlayOpen) syncChartLayout(); });
+window.addEventListener('resize', () => { if(liveChart) syncChartLayout(); });
+window.addEventListener('orientationchange', () => { if(liveChart) syncChartLayout(); });
 
 // forceCompact: pass true/false to override device detection (used for PNG export,
 // which always renders desktop-style regardless of the device it's downloaded from).
@@ -1266,37 +1290,15 @@ function currentRowsForSelectedDate(){
   });
 }
 
-function updateLiveChartIfOpen(rowsForDate){
-  if(!chartOverlayOpen || !liveChart) return;
-  const { labels, datasets } = buildChartData(rowsForDate);
-  liveChart.data.labels = labels;
-  datasets.forEach((ds,i)=>{
-    if(liveChart.data.datasets[i]){
-      liveChart.data.datasets[i].data = ds.data;
-    } else {
-      tagOriginalStyle(ds);
-      liveChart.data.datasets[i] = ds;
-    }
-  });
-  liveChart.data.datasets.length = datasets.length;
-  applySelectionStyling(); // re-apply current selection/dimming on top of the fresh data
-}
-
-document.getElementById('chartCloseBtn').addEventListener('click', closeLiveChart);
 document.getElementById('chartDownloadBtn').addEventListener('click', downloadChartPNG);
 document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
-document.getElementById('chartOverlay').addEventListener('click', (e)=>{
-  if(e.target.id === 'chartOverlay') closeLiveChart();
-});
-document.querySelector('.chart-panel').addEventListener('click', (e)=>{
-  // tapping anywhere in the panel that isn't the plot itself dismisses the
-  // hover tooltip — mainly for touch, where a tap otherwise leaves it stuck
+document.getElementById('chartPanel').addEventListener('click', (e)=>{
+  // tapping anywhere in the chart panel that isn't the plot itself dismisses
+  // the hover tooltip — mainly for touch, where a tap otherwise leaves it stuck
   if(!e.target.closest('#liveChartCanvas')) hideChartTooltip();
 });
 document.addEventListener('keydown', (e)=>{
-  if(e.key !== 'Escape' || !chartOverlayOpen) return;
-  if(selectedLabels.size > 0) clearSelection(); // first Esc: drop the selection
-  else closeLiveChart(); // second Esc (or first, if nothing was selected): close
+  if(e.key === 'Escape' && selectedLabels.size > 0) clearSelection();
 });
 
 /* ---------- theme handling with a swift circular transition from the toggle ---------- */
@@ -1304,7 +1306,7 @@ function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
   document.getElementById('themeToggle').setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
   try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
-  if(chartOverlayOpen && liveChart){
+  if(liveChart){
     liveChart.options = buildChartOptions();
     const demandDs = liveChart.data.datasets.find(d => d.label === 'Total Demand');
     if(demandDs){
