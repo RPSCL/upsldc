@@ -522,7 +522,7 @@
     margin-bottom:4px;
   }
   .chart-section-head h2{ margin:0; font-size:15px; }
-  .chart-section-head .chart-sub{ color:var(--muted); font-size:11.5px; margin-top:1px; }
+  .chart-section-head .chart-sub{ display:none; } /* redundant now — the date picker pill on this same row already shows the date, and hiding this keeps every item on the row a single line so they actually center together */
   .chart-head-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
   .chart-close, .chart-download, .chart-reset, .chart-expand{
     width:30px;
@@ -620,7 +620,6 @@
       max-height:calc(100vh - 380px);
       min-height:0;
     }
-    .chart-section-head .chart-sub{ display:none; }
     .chart-legend-row{ display:none; } /* native canvas legend is used on mobile instead */
   }
 
