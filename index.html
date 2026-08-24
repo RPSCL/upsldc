@@ -563,15 +563,19 @@
     min-height:0;
   }
 
-  /* custom DOM legend: sits directly under the "Live Chart" title on desktop,
-     replacing Chart.js's own canvas-drawn legend there (which carries fixed
-     internal padding we can't tighten). Mobile keeps the native legend
-     instead — see the mobile override below and buildChartOptions(). */
+  /* custom DOM legend: lives on the same row as the "Live Chart" title now,
+     filling the open space between the title and the date-nav/action
+     buttons — replacing Chart.js's own canvas-drawn legend on desktop
+     (which carries fixed internal padding we can't tighten and used to eat
+     an entire extra row). Mobile keeps the native legend instead — see the
+     mobile override below and buildChartOptions(). */
   .chart-legend-row{
     display:flex;
     flex-wrap:wrap;
-    gap:8px 14px;
-    margin-top:6px;
+    align-items:center;
+    gap:6px 14px;
+    flex:1 1 320px;
+    min-width:0;
   }
   .legend-chip{
     display:inline-flex;
@@ -586,6 +590,7 @@
     font-weight:500;
     cursor:pointer;
     opacity:1;
+    white-space:nowrap;
     transition:opacity .15s ease;
   }
   .legend-chip.dimmed{ opacity:.4; }
@@ -792,6 +797,7 @@
       <h2 id="chartTitle">Live Chart</h2>
       <div class="chart-sub" id="chartSub"></div>
     </div>
+    <div class="chart-legend-row" id="chartLegendRow"></div>
     <div class="chart-head-actions">
       <div class="date-nav">
         <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
@@ -824,7 +830,6 @@
       </button>
     </div>
   </div>
-  <div class="chart-legend-row" id="chartLegendRow"></div>
   <div class="chart-canvas-wrap">
     <canvas id="liveChartCanvas"></canvas>
   </div>
