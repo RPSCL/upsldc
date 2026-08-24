@@ -23,8 +23,8 @@ import requests
 MAIN_URL = "https://www.upsldc.org/assets/dataset/realtime.json"
 SUMMARY_URL = "https://www.upsldc.org/assets/dataset/real-time-summary.json"
 
-BOT_TOKEN = "YOUR_BOT_TOKEN"
-TST_ID = "YOUR_CHAT_ID"
+BOT_TOKEN = "5588744140:AAFMzYGBbQDzZ_hYDf9d1WSTHmC3I-Z3kZk"
+TST_ID = "-1003175374557"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_CSV = os.path.join(BASE_DIR, "upsldc_hourly_data.csv")
