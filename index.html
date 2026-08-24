@@ -1745,10 +1745,31 @@ function downloadChartAsHTML(){
     interaction:{ mode:'index', intersect:false },
     plugins:{
       legend:{ position:'top', labels:{ color:c.text, usePointStyle:true, boxWidth:12 } },
-      tooltip:{ backgroundColor:hexToRgba(c.panel,.9), titleColor:c.text, bodyColor:c.text, borderColor:c.border, borderWidth:1, padding:10 }
+      tooltip:{
+        backgroundColor:hexToRgba(c.panel,.9), titleColor:c.text, bodyColor:c.text, borderColor:c.border, borderWidth:1, padding:10,
+        callbacks:{
+          title:(items)=>{
+            if(!items.length) return '';
+            const m = Math.round(items[0].parsed.x);
+            const h = Math.floor(m/60);
+            const mm = ((m%60)+60)%60;
+            return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+          }
+        }
+      }
     },
     scales:{
-      x:{ ticks:{ color:c.muted }, grid:{ color:c.border } },
+      x:{
+        type:'linear',
+        bounds:'data',
+        ticks:{ color:c.muted, callback:(v)=>{
+          const m = Math.round(v);
+          const h = Math.floor(m/60);
+          const mm = ((m%60)+60)%60;
+          return String(h).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+        } },
+        grid:{ color:c.border }
+      },
       yAG:{ position:'left', ticks:{ color:c.muted }, grid:{ color:c.border }, title:{ display:true, text:'Actual Generation (MW)', color:c.muted } },
       yDemand:{ position:'right', ticks:{ color:c.muted }, grid:{ drawOnChartArea:false }, title:{ display:true, text:'Total Demand (MW)', color:c.muted } }
     }
@@ -1887,6 +1908,11 @@ function buildChartOptions(forceCompact, forceLegend){
     scales:{
       x:{
         type:'linear',
+        // without this, Chart.js's default "nice round number" tick rounding
+        // (computed before our own equidistant-tick logic runs) stretches the
+        // axis's rendered range out past the real last data point — this pins
+        // it strictly to the actual data extent instead, so no dead space
+        bounds:'data',
         ticks:{ color:c.muted, maxRotation:0, font:{ size: compact ? 9 : 11 }, callback:(v)=>formatMinutesAsHHMM(v) },
         grid:{ color:c.border },
         afterBuildTicks: (axis) => buildEquidistantTicks(axis, compact ? 10 : 24)
