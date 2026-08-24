@@ -357,7 +357,7 @@
     color-scheme: dark;
     -webkit-appearance:none;
     appearance:none;
-    width:112px;
+    width:130px;
   }
   html[data-theme="light"] .date-nav input[type="date"]{ color-scheme: light; }
   /* fully suppress the browser's own indicator (which can render as a plain
@@ -503,7 +503,7 @@
   .chart-section-head h2{ margin:0; font-size:15px; }
   .chart-section-head .chart-sub{ color:var(--muted); font-size:11.5px; margin-top:1px; }
   .chart-head-actions{ display:flex; align-items:center; gap:8px; flex:0 0 auto; }
-  .chart-close, .chart-download, .chart-reset{
+  .chart-close, .chart-download, .chart-reset, .chart-expand{
     width:30px;
     height:30px;
     border-radius:999px;
@@ -519,10 +519,10 @@
     transition:border-color .15s ease, color .15s ease;
     padding:0;
   }
-  .chart-download svg, .chart-reset svg{ width:14px; height:14px; }
-  .chart-close:active, .chart-download:active, .chart-reset:active{ border-color:var(--accent); color:var(--accent); }
+  .chart-download svg, .chart-reset svg, .chart-expand svg{ width:14px; height:14px; }
+  .chart-close:active, .chart-download:active, .chart-reset:active, .chart-expand:active{ border-color:var(--accent); color:var(--accent); }
   @media (hover:hover) and (pointer:fine){
-    .chart-close:hover, .chart-download:hover, .chart-reset:hover{ border-color:var(--accent); color:var(--accent); }
+    .chart-close:hover, .chart-download:hover, .chart-reset:hover, .chart-expand:hover{ border-color:var(--accent); color:var(--accent); }
   }
   .chart-canvas-wrap{
     position:relative;
@@ -534,8 +534,55 @@
     min-height:360px;
   }
   @media (max-width:640px){
-    .chart-canvas-wrap{ height:calc(100vh - 300px); min-height:280px; }
+    /* square-ish rather than tall, so the collapsed table bar and footer
+       stay visible on screen without scrolling */
+    .chart-canvas-wrap{
+      aspect-ratio: 1 / 1;
+      height:auto;
+      max-height:calc(100vh - 380px);
+    }
     .chart-section-head .chart-sub{ display:none; }
+  }
+
+  /* ---------- fullscreen chart overlay (vertical only, no rotation) ---------- */
+  .fullscreen-chart-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.6);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:16px;
+    z-index:200;
+  }
+  .fullscreen-chart-overlay[hidden]{ display:none; }
+  .fullscreen-chart-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:16px;
+    box-shadow:var(--shadow);
+    width:min(1100px, 100%);
+    height:min(94vh, 900px);
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    padding:16px 18px 18px;
+  }
+  .fullscreen-chart-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .fullscreen-chart-head h2{ margin:0; font-size:16px; }
+  .fullscreen-chart-canvas-wrap{
+    position:relative;
+    flex:1 1 auto;
+    min-height:0;
+  }
+  @media (max-width:640px){
+    .fullscreen-chart-overlay{ padding:0; }
+    .fullscreen-chart-panel{ width:100%; height:100%; border-radius:0; padding:12px; }
   }
 
   /* ---------- footer ---------- */
@@ -563,7 +610,7 @@
     .panel{ padding:12px; border-radius:14px; }
     .chart-section-head{ gap:8px; }
     .chart-section-head h2{ font-size:13px; }
-    .date-nav input[type="date"]{ width:94px; font-size:11px; }
+    .date-nav input[type="date"]{ width:148px; font-size:12.5px; padding:6px 32px 6px 12px; }
   }
 </style>
 </head>
@@ -593,7 +640,7 @@
 <div class="panel" id="chartPanel">
   <div class="chart-section-head">
     <div>
-      <h2>Live Chart</h2>
+      <h2 id="chartTitle">Live Chart</h2>
       <div class="chart-sub" id="chartSub"></div>
     </div>
     <div class="chart-head-actions">
@@ -621,10 +668,36 @@
           <path d="M4 20h16"/>
         </svg>
       </button>
+      <button class="chart-expand" id="chartExpandBtn" aria-label="Expand chart to full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 3H5a2 2 0 0 0-2 2v4M15 3h4a2 2 0 0 1 2 2v4M9 21H5a2 2 0 0 1-2-2v-4M15 21h4a2 2 0 0 0 2-2v-4"/>
+        </svg>
+      </button>
     </div>
   </div>
   <div class="chart-canvas-wrap">
     <canvas id="liveChartCanvas"></canvas>
+  </div>
+</div>
+
+<div class="fullscreen-chart-overlay" id="fullscreenChartOverlay" hidden>
+  <div class="fullscreen-chart-panel">
+    <div class="fullscreen-chart-head">
+      <h2 id="fullscreenChartTitle">Live Chart</h2>
+      <div class="chart-head-actions">
+        <button class="chart-download" id="fullscreenDownloadBtn" aria-label="Download chart as PNG">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3v13"/>
+            <path d="M7 11l5 5 5-5"/>
+            <path d="M4 20h16"/>
+          </svg>
+        </button>
+        <button class="chart-close" id="fullscreenCloseBtn" aria-label="Close">&#10005;</button>
+      </div>
+    </div>
+    <div class="fullscreen-chart-canvas-wrap">
+      <canvas id="fullscreenChartCanvas"></canvas>
+    </div>
   </div>
 </div>
 
@@ -953,6 +1026,7 @@ async function copyTableToClipboard(btn){
 
 /* ---------- live chart: all *_AG series vs time, Total Demand on its own scale ---------- */
 let liveChart = null;
+let fullscreenChart = null;
 let lastChartISO = null;
 let selectedLabels = new Set();
 
@@ -978,6 +1052,30 @@ function getSolarGenIdx(){
   return idx;
 }
 
+// Draws a thin vertical crosshair at the currently hovered/active x-position —
+// dots are gone from the lines themselves, so this is what shows "you're
+// looking at this exact time" while the tooltip shows the values.
+const crosshairPlugin = {
+  id: 'crosshair',
+  afterDraw(chart){
+    const active = chart.tooltip && chart.tooltip._active;
+    if(!active || !active.length) return;
+    const x = active[0].element.x;
+    const area = chart.chartArea;
+    const ctx = chart.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x, area.top);
+    ctx.lineTo(x, area.bottom);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = chartThemeColors().border;
+    ctx.setLineDash([4,4]);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+if(typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
+
 const CHART_PALETTE = ['#ff6b6b','#4dabf7','#51cf66','#f59f00','#cc5de8','#20c997','#ff922b','#5c7cfa','#ff8fa3','#66d9e8'];
 const SOLAR_COLOR = '#ffd43b';
 
@@ -994,9 +1092,9 @@ function buildChartData(rowsForDate){
     borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
     backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
     yAxisID: 'yAG',
-    tension: .25,
+    tension: .35,
     borderWidth: 2,
-    pointRadius: 3,
+    pointRadius: 0,
     pointHoverRadius: 5,
     spanGaps: true,
   }));
@@ -1011,9 +1109,9 @@ function buildChartData(rowsForDate){
       borderColor: SOLAR_COLOR,
       backgroundColor: SOLAR_COLOR,
       yAxisID: 'yAG',
-      tension: .25,
+      tension: .35,
       borderWidth: 2.5,
-      pointRadius: 3,
+      pointRadius: 0,
       pointHoverRadius: 5,
       spanGaps: true,
     });
@@ -1029,8 +1127,8 @@ function buildChartData(rowsForDate){
       yAxisID: 'yDemand',
       borderDash: [6,4],
       borderWidth: 2.5,
-      tension: .25,
-      pointRadius: 2,
+      tension: .35,
+      pointRadius: 0,
       pointHoverRadius: 5,
       spanGaps: true,
     });
@@ -1065,24 +1163,26 @@ function tagOriginalStyle(ds){
 }
 
 // selecting one or more lines (via canvas click or legend click) dims every
-// other line to a flat grey, in both the plot and the legend swatches
+// other line to a flat grey, in both the plot and the legend swatches —
+// applies to whichever chart instance(s) currently exist (inline, fullscreen, or both)
 function applySelectionStyling(){
-  if(!liveChart) return;
   const dimColor = hexToRgba(chartThemeColors().muted, 0.3);
-  liveChart.data.datasets.forEach(ds=>{
-    const isSelected = selectedLabels.size === 0 || selectedLabels.has(ds.label);
-    if(isSelected){
-      ds.borderColor = ds._origColor;
-      ds.backgroundColor = ds._origBg;
-      ds.pointRadius = ds._origPointRadius;
-      ds.borderWidth = ds._origBorderWidth;
-    } else {
-      ds.borderColor = dimColor;
-      ds.backgroundColor = dimColor;
-      ds.pointRadius = 0;
-    }
+  [liveChart, fullscreenChart].filter(Boolean).forEach(chart=>{
+    chart.data.datasets.forEach(ds=>{
+      const isSelected = selectedLabels.size === 0 || selectedLabels.has(ds.label);
+      if(isSelected){
+        ds.borderColor = ds._origColor;
+        ds.backgroundColor = ds._origBg;
+        ds.pointRadius = ds._origPointRadius;
+        ds.borderWidth = ds._origBorderWidth;
+      } else {
+        ds.borderColor = dimColor;
+        ds.backgroundColor = dimColor;
+        ds.pointRadius = 0;
+      }
+    });
+    chart.update();
   });
-  liveChart.update();
 }
 
 function toggleSelection(label){
@@ -1104,13 +1204,15 @@ function updateResetButtonVisibility(){
   if(btn) btn.style.display = selectedLabels.size > 0 ? '' : 'none';
 }
 
-// programmatically dismiss the hover tooltip — used when tapping outside
-// the canvas, since a touch tap otherwise leaves it stuck on screen
+// programmatically dismiss the hover tooltip — used when tapping outside a
+// canvas, since a touch tap otherwise leaves it stuck on screen; applies to
+// whichever chart instance(s) currently exist
 function hideChartTooltip(){
-  if(!liveChart) return;
-  liveChart.setActiveElements([]);
-  if(liveChart.tooltip) liveChart.tooltip.setActiveElements([], { x:0, y:0 });
-  liveChart.update();
+  [liveChart, fullscreenChart].filter(Boolean).forEach(chart=>{
+    chart.setActiveElements([]);
+    if(chart.tooltip) chart.tooltip.setActiveElements([], { x:0, y:0 });
+    chart.update();
+  });
 }
 
 function isPhonePortrait(){
@@ -1122,43 +1224,94 @@ function syncChartLayout(){
     liveChart.options = buildChartOptions(); // re-picks compact/full sizing for the current width
     setTimeout(() => liveChart && liveChart.resize(), 60);
   }
+  if(fullscreenChart){
+    setTimeout(() => fullscreenChart && fullscreenChart.resize(), 60);
+  }
 }
 
-// The chart is now always visible inline on the page (not a modal) — this
+function updateChartTitle(){
+  const isToday = selectedISO === isoOf(today());
+  const label = isToday ? 'Live Chart' : 'Historical Chart';
+  const titleEl = document.getElementById('chartTitle');
+  if(titleEl) titleEl.textContent = label;
+  const fsTitleEl = document.getElementById('fullscreenChartTitle');
+  if(fsTitleEl) fsTitleEl.textContent = label;
+}
+
+function buildTaggedDatasets(rowsForDate){
+  const { labels, datasets } = buildChartData(rowsForDate);
+  datasets.forEach(tagOriginalStyle);
+  return { labels, datasets };
+}
+
+function mergeDataIntoChart(chart, labels, datasets){
+  chart.data.labels = labels;
+  datasets.forEach((ds,i)=>{
+    if(chart.data.datasets[i]){
+      chart.data.datasets[i].data = ds.data;
+    } else {
+      chart.data.datasets[i] = ds;
+    }
+  });
+  chart.data.datasets.length = datasets.length;
+}
+
+// The inline chart is always visible on the page (not a modal) — this
 // creates it once on first data, then just updates it in place on every
-// subsequent render (date change, live 60s refresh, etc).
+// subsequent render (date change, live 60s refresh, etc). If the fullscreen
+// view is also open, its chart is kept in sync the same way.
 function initOrUpdateLiveChart(rowsForDate){
   if(rowsForDate.length === 0) return; // nothing to plot for this date yet
   if(typeof Chart === 'undefined') return; // library not ready yet; will retry on next render
 
   const dateChanged = lastChartISO !== selectedISO;
   lastChartISO = selectedISO;
+  if(dateChanged) selectedLabels = new Set(); // a new day's chart starts unfiltered
 
-  const { labels, datasets } = buildChartData(rowsForDate);
+  updateChartTitle();
 
   if(!liveChart){
-    datasets.forEach(tagOriginalStyle);
-    selectedLabels = new Set();
+    const { labels, datasets } = buildTaggedDatasets(rowsForDate);
     const ctx = document.getElementById('liveChartCanvas').getContext('2d');
     liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
     updateResetButtonVisibility();
     setTimeout(() => liveChart && liveChart.resize(), 60);
-    return;
+  } else {
+    const { labels, datasets } = buildTaggedDatasets(rowsForDate);
+    mergeDataIntoChart(liveChart, labels, datasets);
   }
 
-  if(dateChanged) selectedLabels = new Set(); // a new day's chart starts unfiltered
-  liveChart.data.labels = labels;
-  datasets.forEach((ds,i)=>{
-    if(liveChart.data.datasets[i]){
-      liveChart.data.datasets[i].data = ds.data;
-    } else {
-      tagOriginalStyle(ds);
-      liveChart.data.datasets[i] = ds;
-    }
-  });
-  liveChart.data.datasets.length = datasets.length;
-  applySelectionStyling(); // re-applies current selection/dimming on top of the fresh data
+  if(fullscreenChart){
+    const fsData = buildTaggedDatasets(rowsForDate); // independent copy for the second canvas
+    mergeDataIntoChart(fullscreenChart, fsData.labels, fsData.datasets);
+  }
+
+  applySelectionStyling(); // applies to whichever chart instance(s) currently exist
   updateResetButtonVisibility();
+}
+
+// Opens a larger, clearer full-screen version of the chart (vertical layout
+// only — no rotation). Always renders non-compact (bigger fonts/legend/axis
+// titles) since there's more room, regardless of device width.
+function openFullscreenChart(){
+  const rowsForDate = currentRowsForSelectedDate();
+  if(rowsForDate.length === 0){ alert('No data to chart for this date yet.'); return; }
+  if(typeof Chart === 'undefined'){ alert('Chart library failed to load — check your connection and try again.'); return; }
+
+  const { labels, datasets } = buildTaggedDatasets(rowsForDate);
+  const ctx = document.getElementById('fullscreenChartCanvas').getContext('2d');
+  if(fullscreenChart) fullscreenChart.destroy();
+  fullscreenChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions(false) });
+  applySelectionStyling(); // sync current selection onto the new instance
+
+  updateChartTitle();
+  document.getElementById('fullscreenChartOverlay').hidden = false;
+  setTimeout(() => fullscreenChart && fullscreenChart.resize(), 60);
+}
+
+function closeFullscreenChart(){
+  document.getElementById('fullscreenChartOverlay').hidden = true;
+  if(fullscreenChart){ fullscreenChart.destroy(); fullscreenChart = null; }
 }
 
 // Fills the canvas with a solid theme-matching background before Chart.js
@@ -1233,8 +1386,8 @@ function downloadChartPNG(){
   }
 }
 
-window.addEventListener('resize', () => { if(liveChart) syncChartLayout(); });
-window.addEventListener('orientationchange', () => { if(liveChart) syncChartLayout(); });
+window.addEventListener('resize', () => { if(liveChart || fullscreenChart) syncChartLayout(); });
+window.addEventListener('orientationchange', () => { if(liveChart || fullscreenChart) syncChartLayout(); });
 
 // forceCompact: pass true/false to override device detection (used for PNG export,
 // which always renders desktop-style regardless of the device it's downloaded from).
@@ -1306,14 +1459,36 @@ function currentRowsForSelectedDate(){
 
 document.getElementById('chartDownloadBtn').addEventListener('click', downloadChartPNG);
 document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
-document.getElementById('chartPanel').addEventListener('click', (e)=>{
-  // tapping anywhere in the chart panel that isn't the plot itself dismisses
-  // the hover tooltip — mainly for touch, where a tap otherwise leaves it stuck
-  if(!e.target.closest('#liveChartCanvas')) hideChartTooltip();
+document.getElementById('chartExpandBtn').addEventListener('click', openFullscreenChart);
+document.getElementById('fullscreenDownloadBtn').addEventListener('click', downloadChartPNG);
+document.getElementById('fullscreenCloseBtn').addEventListener('click', closeFullscreenChart);
+document.getElementById('fullscreenChartOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'fullscreenChartOverlay') closeFullscreenChart();
+});
+// Anywhere outside the plot itself — the header, the page background, either
+// overlay's chrome, or even the axis/scale label gutters *within* the canvas —
+// dismisses the hover tooltip. Matters most on touch, where a tap otherwise
+// leaves the tooltip stuck on screen; applies to both chart instances.
+function isClickInsidePlotArea(chart, evt){
+  if(!chart || !chart.chartArea) return false;
+  const rect = chart.canvas.getBoundingClientRect();
+  const x = evt.clientX - rect.left;
+  const y = evt.clientY - rect.top;
+  const area = chart.chartArea;
+  return x >= area.left && x <= area.right && y >= area.top && y <= area.bottom;
+}
+document.addEventListener('click', (e)=>{
+  const onLive = e.target.closest('#liveChartCanvas');
+  const onFullscreen = e.target.closest('#fullscreenChartCanvas');
+  if(!onLive && !onFullscreen){ hideChartTooltip(); return; }
+  const chart = onLive ? liveChart : fullscreenChart;
+  if(!isClickInsidePlotArea(chart, e)) hideChartTooltip();
 });
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
-  if(selectedLabels.size > 0){ clearSelection(); return; } // first: drop any chart selection
+  const fsOverlay = document.getElementById('fullscreenChartOverlay');
+  if(fsOverlay && !fsOverlay.hidden){ closeFullscreenChart(); return; } // first: close the fullscreen view if open
+  if(selectedLabels.size > 0){ clearSelection(); return; } // then: drop any chart selection
   if(tableExpanded) setTableExpanded(false); // then: collapse the table if it's open
 });
 
@@ -1322,15 +1497,13 @@ function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
   document.getElementById('themeToggle').setAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
   try{ localStorage.setItem('rpscl-theme', theme); }catch(e){}
-  if(liveChart){
-    liveChart.options = buildChartOptions();
-    const demandDs = liveChart.data.datasets.find(d => d.label === 'Total Demand');
-    if(demandDs){
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      demandDs._origColor = accent; // keep the "true" color in sync so selection/dimming stays correct
-    }
-    applySelectionStyling(); // also refreshes the dim color to the new theme's muted tone
-  }
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  [liveChart, fullscreenChart].filter(Boolean).forEach(chart=>{
+    chart.options = buildChartOptions(chart === fullscreenChart ? false : undefined);
+    const demandDs = chart.data.datasets.find(d => d.label === 'Total Demand');
+    if(demandDs) demandDs._origColor = accent; // keep the "true" color in sync so selection/dimming stays correct
+  });
+  if(liveChart || fullscreenChart) applySelectionStyling(); // also refreshes the dim color to the new theme's muted tone
 }
 
 function toggleTheme(){
