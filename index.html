@@ -494,8 +494,17 @@
   @media (hover:hover) and (pointer:fine){
     .table-toggle:hover .chevron-icon{ color:var(--accent); }
   }
-  #tableBodyWrap{ margin-top:14px; }
   #tableBodyWrap[hidden]{ display:none; }
+
+  /* extra separation pushes the Data Table bar further from the chart above it */
+  .table-panel{
+    margin-top:26px;
+    padding:0; /* padding now lives on .table-toggle itself, so the whole
+                  visible bar — not just an inner box — is clickable */
+    overflow:hidden;
+  }
+  .table-toggle{ padding:16px; }
+  #tableBodyWrap{ padding:0 16px 16px; margin-top:14px; }
 
   /* ---------- live chart section (always visible, inline — not a modal) ---------- */
   .chart-section-head{
@@ -504,7 +513,7 @@
     justify-content:space-between;
     gap:12px;
     flex-wrap:wrap;
-    margin-bottom:12px;
+    margin-bottom:4px;
   }
   .chart-section-head h2{ margin:0; font-size:15px; }
   .chart-section-head .chart-sub{ color:var(--muted); font-size:11.5px; margin-top:1px; }
@@ -599,6 +608,77 @@
     .fullscreen-chart-panel{ width:100%; height:100%; border-radius:0; padding:12px; }
   }
 
+  /* ---------- download-options popup ---------- */
+  .download-options-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.5);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:20px;
+    z-index:150;
+  }
+  .download-options-overlay[hidden]{ display:none; }
+  .download-options-panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:20px;
+    box-shadow:var(--shadow);
+    padding:20px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    width:min(280px, 92vw);
+  }
+  .download-options-title{
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--muted);
+    text-align:center;
+    text-transform:uppercase;
+    letter-spacing:.04em;
+    margin-bottom:2px;
+  }
+  .pebble-download-btn{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:9px;
+    padding:12px 18px;
+    border-radius:999px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--text);
+    font-size:13.5px;
+    font-weight:600;
+    cursor:pointer;
+    transition:border-color .15s ease, transform .15s ease, background .15s ease;
+  }
+  .pebble-download-btn svg{ width:18px; height:18px; flex:0 0 auto; }
+  @media (hover:hover) and (pointer:fine){
+    .pebble-download-btn:hover{ border-color:var(--accent); transform:translateY(-1px); }
+  }
+  .pebble-download-btn:active{ border-color:var(--accent); }
+
+  /* Interactive HTML button: a little dot bobbing up/down along the sparkline */
+  @keyframes sparkline-bob{
+    0%,100%{ transform:translateY(-2.5px); }
+    50%{ transform:translateY(2.5px); }
+  }
+  .sparkline-dot{
+    animation:sparkline-bob 1.1s ease-in-out infinite;
+    transform-box:fill-box;
+    transform-origin:center;
+  }
+
+  /* Close button: the X gives a small tilt through the Y axis on hover/press */
+  .close-x-icon{ transition:transform .3s ease; }
+  @media (hover:hover) and (pointer:fine){
+    .download-close-btn:hover .close-x-icon{ transform:rotateY(35deg); }
+  }
+  .download-close-btn:active .close-x-icon{ transform:rotateY(35deg); }
+
   /* ---------- footer ---------- */
   .site-footer{
     text-align:center;
@@ -622,6 +702,9 @@
     html[data-theme="dark"] .theme-toggle .thumb{ transform:translateX(24px); }
 
     .panel{ padding:12px; border-radius:14px; }
+    .table-panel{ padding:0; margin-top:20px; }
+    .table-toggle{ padding:12px; }
+    #tableBodyWrap{ padding:0 12px 12px; }
     .chart-section-head{ gap:8px; }
     .chart-section-head h2{ font-size:13px; }
     .date-nav input[type="date"]{ width:148px; font-size:12.5px; padding:6px 32px 6px 12px; }
@@ -721,6 +804,33 @@
   </div>
 </div>
 
+<div class="download-options-overlay" id="downloadOptionsOverlay" hidden>
+  <div class="download-options-panel">
+    <div class="download-options-title">Download as</div>
+    <button class="pebble-download-btn" id="downloadAsImageBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="16" rx="2.5"/>
+        <path d="M5.5 14l3-3 3 2 3-5.5 3 3.5"/>
+        <path d="M5.5 17l3-2 3 3 3-4 3 2"/>
+      </svg>
+      <span>Image</span>
+    </button>
+    <button class="pebble-download-btn" id="downloadAsHtmlBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.5 15l4-6.5 4 4.5 4-9 4 6 4-3.5"/>
+        <circle class="sparkline-dot" cx="10.5" cy="13" r="2.1" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>Interactive HTML</span>
+    </button>
+    <button class="pebble-download-btn download-close-btn" id="downloadOptionsCloseBtn">
+      <svg class="close-x-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+      <span>Close</span>
+    </button>
+  </div>
+</div>
+
 <div class="panel table-panel">
   <button class="table-toggle" id="tableToggleBtn" onclick="toggleTableExpanded()" aria-expanded="false" aria-controls="tableBodyWrap">
     <span>
@@ -766,7 +876,7 @@
   </div>
 </div>
 
-<div class="site-footer">designed by 41009953</div>
+<div class="site-footer">Designed by 41009953</div>
 
 
 <script>
@@ -1383,10 +1493,10 @@ function chartBackgroundPlugin(bgColor){
 // Always exports in the desktop-style layout (full legend/axis titles, larger
 // fonts) regardless of the device it's downloaded from — renders a separate
 // offscreen chart so the on-screen (possibly compact) view is untouched.
-function triggerDownload(dataUrl){
+function triggerDownload(dataUrl, filename){
   const a = document.createElement('a');
   a.href = dataUrl;
-  a.download = 'rpscl-live-chart-' + selectedISO + '.png';
+  a.download = filename;
   document.body.appendChild(a); // some browsers ignore a synthetic click on a detached element
   a.click();
   a.remove();
@@ -1419,7 +1529,7 @@ function downloadChartPNG(){
 
     requestAnimationFrame(() => {
       try{
-        triggerDownload(tempChart.toBase64Image('image/png', 1));
+        triggerDownload(tempChart.toBase64Image('image/png', 1), 'rpscl-live-chart-' + selectedISO + '.png');
       } finally {
         tempChart.destroy();
         tempCanvas.remove();
@@ -1432,8 +1542,74 @@ function downloadChartPNG(){
       liveChart.config.plugins.push(chartBackgroundPlugin(bg));
       liveChart.update();
     }
-    triggerDownload(liveChart.toBase64Image('image/png', 1));
+    triggerDownload(liveChart.toBase64Image('image/png', 1), 'rpscl-live-chart-' + selectedISO + '.png');
   }
+}
+
+// Exports a small standalone HTML file containing just the chart — opens on
+// its own in any browser, with real hover tooltips/crosshair/legend-toggle,
+// no dependency on the rest of this dashboard.
+function downloadChartAsHTML(){
+  if(!liveChart) return;
+  const c = chartThemeColors();
+  const bg = getComputedStyle(document.documentElement).getPropertyValue('--bg').trim();
+  const titleText = document.getElementById('chartTitle') ? document.getElementById('chartTitle').textContent : 'Live Chart';
+
+  // guard against a literal end-of-script-tag sequence anywhere in the JSON
+  // breaking the exported document's own <script> tag — built via split/join
+  // rather than a regex literal to sidestep backslash-escaping ambiguity
+  const FORBIDDEN = '</' + 'script';
+  const safeJSON = (obj) => JSON.stringify(obj).split(FORBIDDEN).join('<\\/script');
+  const dataJSON = safeJSON(liveChart.data);
+  const exportOptions = {
+    responsive:true,
+    maintainAspectRatio:false,
+    interaction:{ mode:'index', intersect:false },
+    plugins:{
+      legend:{ position:'top', labels:{ color:c.text, usePointStyle:true, boxWidth:12 } },
+      tooltip:{ backgroundColor:hexToRgba(c.panel,.9), titleColor:c.text, bodyColor:c.text, borderColor:c.border, borderWidth:1, padding:10 }
+    },
+    scales:{
+      x:{ ticks:{ color:c.muted }, grid:{ color:c.border } },
+      yAG:{ position:'left', ticks:{ color:c.muted }, grid:{ color:c.border }, title:{ display:true, text:'Actual Generation (MW)', color:c.muted } },
+      yDemand:{ position:'right', ticks:{ color:c.muted }, grid:{ drawOnChartArea:false }, title:{ display:true, text:'Total Demand (MW)', color:c.muted } }
+    }
+  };
+  const optionsJSON = safeJSON(exportOptions);
+
+  const scriptOpen = '<' + 'script';
+  const scriptClose = '<' + '/script>';
+  const html = '<!DOCTYPE html>\n<html><head><meta charset="UTF-8">'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    + '<title>' + titleText + ' — ' + selectedISO + '</title>'
+    + scriptOpen + ' src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js">' + scriptClose
+    + '<style>'
+    + 'body{margin:0;background:' + bg + ';color:' + c.text + ';font-family:"Segoe UI",system-ui,sans-serif;padding:20px;}'
+    + 'h1{font-size:18px;margin:0 0 4px;}'
+    + '.sub{color:' + c.muted + ';font-size:13px;margin-bottom:16px;}'
+    + '.wrap{height:82vh;position:relative;}'
+    + '</style></head><body>'
+    + '<h1>' + titleText + '</h1>'
+    + '<div class="sub">' + selectedISO + '</div>'
+    + '<div class="wrap"><canvas id="chart"></canvas></div>'
+    + scriptOpen + '>'
+    + 'const crosshairPlugin={id:"crosshair",afterDraw(chart){const a=chart.tooltip&&chart.tooltip._active;if(!a||!a.length)return;const x=a[0].element.x;const ar=chart.chartArea;const ctx=chart.ctx;ctx.save();ctx.beginPath();ctx.moveTo(x,ar.top);ctx.lineTo(x,ar.bottom);ctx.lineWidth=1;ctx.strokeStyle="' + c.border + '";ctx.setLineDash([4,4]);ctx.stroke();ctx.restore();}};'
+    + 'Chart.register(crosshairPlugin);'
+    + 'new Chart(document.getElementById("chart").getContext("2d"),{type:"line",data:' + dataJSON + ',options:' + optionsJSON + '});'
+    + scriptClose
+    + '</body></html>';
+
+  const blob = new Blob([html], { type:'text/html' });
+  const url = URL.createObjectURL(blob);
+  triggerDownload(url, 'rpscl-live-chart-' + selectedISO + '.html');
+  URL.revokeObjectURL(url);
+}
+
+function openDownloadOptions(){
+  document.getElementById('downloadOptionsOverlay').hidden = false;
+}
+function closeDownloadOptions(){
+  document.getElementById('downloadOptionsOverlay').hidden = true;
 }
 
 window.addEventListener('resize', () => { if(liveChart || fullscreenChart) syncChartLayout(); });
@@ -1507,14 +1683,20 @@ function currentRowsForSelectedDate(){
   });
 }
 
-document.getElementById('chartDownloadBtn').addEventListener('click', downloadChartPNG);
+document.getElementById('chartDownloadBtn').addEventListener('click', openDownloadOptions);
 document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
 document.getElementById('chartExpandBtn').addEventListener('click', openFullscreenChart);
 document.getElementById('fullscreenResetBtn').addEventListener('click', clearSelection);
-document.getElementById('fullscreenDownloadBtn').addEventListener('click', downloadChartPNG);
+document.getElementById('fullscreenDownloadBtn').addEventListener('click', openDownloadOptions);
 document.getElementById('fullscreenCloseBtn').addEventListener('click', closeFullscreenChart);
 document.getElementById('fullscreenChartOverlay').addEventListener('click', (e)=>{
   if(e.target.id === 'fullscreenChartOverlay') closeFullscreenChart();
+});
+document.getElementById('downloadAsImageBtn').addEventListener('click', ()=>{ downloadChartPNG(); closeDownloadOptions(); });
+document.getElementById('downloadAsHtmlBtn').addEventListener('click', ()=>{ downloadChartAsHTML(); closeDownloadOptions(); });
+document.getElementById('downloadOptionsCloseBtn').addEventListener('click', closeDownloadOptions);
+document.getElementById('downloadOptionsOverlay').addEventListener('click', (e)=>{
+  if(e.target.id === 'downloadOptionsOverlay') closeDownloadOptions();
 });
 // Anywhere outside the plot itself — the header, the page background, either
 // overlay's chrome, or even the axis/scale label gutters *within* the canvas —
@@ -1537,6 +1719,8 @@ document.addEventListener('click', (e)=>{
 });
 document.addEventListener('keydown', (e)=>{
   if(e.key !== 'Escape') return;
+  const dlOverlay = document.getElementById('downloadOptionsOverlay');
+  if(dlOverlay && !dlOverlay.hidden){ closeDownloadOptions(); return; }
   // first Esc always returns to the default "everything visible" view, even
   // if the fullscreen chart is open — only once nothing is selected does Esc
   // move on to closing fullscreen, then collapsing the table
