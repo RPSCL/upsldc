@@ -456,6 +456,15 @@
     gap:10px;
     cursor:pointer;
     color:var(--text);
+    outline:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  /* absolutely no visible trace of a click/focus on this control — not even
+     the usual keyboard focus-visible ring — per explicit request */
+  .table-toggle:focus,
+  .table-toggle:focus-visible{
+    outline:none;
+    box-shadow:none;
   }
   .table-toggle .table-toggle-label{
     font-size:13px;
@@ -517,10 +526,15 @@
   }
   .chart-canvas-wrap{
     position:relative;
-    height:min(52vh, 460px);
+    /* fills whatever vertical space is left once the header, this panel's own
+       chrome, the collapsed table bar, and the footer are accounted for —
+       so with the table collapsed, the whole page fits one screen and the
+       chart claims essentially all the freed-up room */
+    height:calc(100vh - 340px);
+    min-height:360px;
   }
   @media (max-width:640px){
-    .chart-canvas-wrap{ height:46vh; }
+    .chart-canvas-wrap{ height:calc(100vh - 300px); min-height:280px; }
     .chart-section-head .chart-sub{ display:none; }
   }
 
@@ -1298,7 +1312,9 @@ document.getElementById('chartPanel').addEventListener('click', (e)=>{
   if(!e.target.closest('#liveChartCanvas')) hideChartTooltip();
 });
 document.addEventListener('keydown', (e)=>{
-  if(e.key === 'Escape' && selectedLabels.size > 0) clearSelection();
+  if(e.key !== 'Escape') return;
+  if(selectedLabels.size > 0){ clearSelection(); return; } // first: drop any chart selection
+  if(tableExpanded) setTableExpanded(false); // then: collapse the table if it's open
 });
 
 /* ---------- theme handling with a swift circular transition from the toggle ---------- */
