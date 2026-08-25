@@ -667,42 +667,6 @@
   /* controls locked while LIVE mode is active */
   .date-nav input[type="date"]:disabled{ opacity:.45; cursor:not-allowed; }
   .table-toggle:disabled{ opacity:.55; cursor:not-allowed; }
-
-  /* tooltip shown on hover for anything locked while LIVE mode is active —
-     a custom tooltip rather than the native title attribute, since title
-     doesn't reliably show on disabled elements across browsers and can't
-     be used at all on <input> (the date picker's tooltip lives on its
-     wrapper span instead, for that reason) */
-  .locked-tooltip{ position:relative; }
-  .locked-tooltip:hover::after{
-    content:attr(data-tooltip);
-    position:absolute;
-    bottom:calc(100% + 9px);
-    left:50%;
-    transform:translateX(-50%);
-    background:var(--panel);
-    color:var(--text);
-    border:1px solid var(--border);
-    padding:6px 10px;
-    border-radius:6px;
-    font-size:11px;
-    font-weight:600;
-    white-space:nowrap;
-    box-shadow:var(--shadow);
-    pointer-events:none;
-    z-index:300;
-  }
-  .locked-tooltip:hover::before{
-    content:'';
-    position:absolute;
-    bottom:calc(100% + 3px);
-    left:50%;
-    transform:translateX(-50%);
-    border:5px solid transparent;
-    border-top-color:var(--border);
-    pointer-events:none;
-    z-index:300;
-  }
   .chart-reset.breathing{ animation:breathe-btn 500ms ease-in-out; }
   /* soft persistent glow while a chart selection is active — a visual nudge
      toward the way back to "all lines" */
@@ -922,7 +886,7 @@
     .table-toggle{ padding:12px; }
     #tableBodyWrap{ padding:0 12px 12px; }
     .chart-section-head{ gap:8px; }
-    .chart-section-head h2{ font-size:12px; white-space:nowrap; }
+    .chart-section-head h2{ font-size:13px; }
     .date-nav input[type="date"]{ width:148px; font-size:12.5px; padding:6px 32px 6px 12px; }
     .row-copy-col{ display:none; } /* row-level copy is web/desktop only */
   }
@@ -978,7 +942,6 @@
             <rect x="3" y="4.5" width="18" height="16" rx="2.5"/>
             <path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>
           </svg>
-          <button type="button" class="date-lock-overlay" id="dateLockOverlay" aria-label="Date picker locked while Live mode is on" hidden></button>
         </span>
         <button class="arrow" id="nextDay" onclick="stepDate(1)" aria-label="Next day">&#8250;</button>
       </div>
@@ -1263,7 +1226,6 @@ function addRosaTotals(row){
 }
 
 function stepDate(delta){
-  if(liveModeActive){ showLiveLockedMessage(); return; }
   const input = document.getElementById('dateInput');
   const cur = input.valueAsDate || MIN_DATE;
   const next = new Date(cur.getFullYear(), cur.getMonth(), cur.getDate() + delta);
@@ -1293,32 +1255,11 @@ function setTableExpanded(expanded){
     });
   }
 }
-function toggleTableExpanded(){
-  if(liveModeActive){ showLiveLockedMessage(); return; }
-  setTableExpanded(!tableExpanded);
-}
+function toggleTableExpanded(){ setTableExpanded(!tableExpanded); }
 
 // LIVE Chart mode (web only): locks the date-based controls and streams a
 // rolling last-6-hours window instead. Reuses the existing inline chart —
 // there's no separate overlay for this.
-
-// A message from the site itself — shown only when someone actually clicks a
-// locked control (not on hover), since native `disabled` blocks click events
-// entirely. These controls use a "soft disabled" look (a CSS class, not the
-// real disabled attribute) precisely so the click still fires and can react.
-let liveLockToastTimer = null;
-function showLiveLockedMessage(){
-  const toast = document.getElementById('liveLockToast');
-  if(!toast) return;
-  toast.hidden = false;
-  requestAnimationFrame(() => toast.classList.add('show'));
-  clearTimeout(liveLockToastTimer);
-  liveLockToastTimer = setTimeout(() => {
-    toast.classList.remove('show');
-    setTimeout(() => { toast.hidden = true; }, 250);
-  }, 2400);
-}
-
 function setLiveMode(active){
   liveModeActive = active;
   try{ localStorage.setItem('rpscl-live-mode', active ? '1' : '0'); }catch(e){}
@@ -1326,19 +1267,11 @@ function setLiveMode(active){
   const liveBtn = document.getElementById('liveToggleBtn');
   if(liveBtn) liveBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
 
-  const prevDay = document.getElementById('prevDay');
-  const nextDay = document.getElementById('nextDay');
-  const chartDownloadBtn = document.getElementById('chartDownloadBtn');
-  const tableToggleBtn = document.getElementById('tableToggleBtn');
-  const dateLockOverlay = document.getElementById('dateLockOverlay');
-
-  // soft-disabled: a CSS class, not the real disabled attribute — so clicks
-  // still fire and can show the "switch off Live mode" message instead of
-  // just silently doing nothing
-  [prevDay, nextDay, chartDownloadBtn, tableToggleBtn].forEach(el => {
-    if(el) el.classList.toggle('soft-disabled', active);
-  });
-  if(dateLockOverlay) dateLockOverlay.hidden = !active; // catches clicks meant for the (still-enabled) date input
+  document.getElementById('prevDay').disabled = active;
+  document.getElementById('nextDay').disabled = active;
+  document.getElementById('dateInput').disabled = active;
+  document.getElementById('chartDownloadBtn').disabled = active;
+  document.getElementById('tableToggleBtn').disabled = active;
 
   const tableToggleSub = document.getElementById('tableToggleSub');
   if(active){
@@ -1890,17 +1823,8 @@ function syncChartLayout(){
 }
 
 function updateChartTitle(){
-  let label;
-  if(liveModeActive){
-    label = 'LIVE Chart'; // only ever reachable on web, since Live mode itself is web-only
-  } else {
-    const todayISO = isoOf(today());
-    const yesterday = today();
-    yesterday.setDate(yesterday.getDate() - 1);
-    if(selectedISO === todayISO) label = "Today's Chart";
-    else if(selectedISO === isoOf(yesterday)) label = "Yesterday's Chart";
-    else label = 'Historical Chart';
-  }
+  const isToday = selectedISO === isoOf(today());
+  const label = (liveModeActive || isToday) ? 'Live Chart' : 'Historical Chart';
   const titleEl = document.getElementById('chartTitle');
   if(titleEl) titleEl.textContent = label;
   const fsTitleEl = document.getElementById('fullscreenChartTitle');
@@ -2311,10 +2235,7 @@ function currentRowsForSelectedDate(){
   });
 }
 
-document.getElementById('chartDownloadBtn').addEventListener('click', () => {
-  if(liveModeActive){ showLiveLockedMessage(); return; } // fullscreenDownloadBtn shares openDownloadOptions and stays active in Live mode — only this inline one gets locked
-  openDownloadOptions();
-});
+document.getElementById('chartDownloadBtn').addEventListener('click', openDownloadOptions);
 document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
 document.getElementById('chartExpandBtn').addEventListener('click', openFullscreenChart);
 document.getElementById('liveToggleBtn').addEventListener('click', toggleLiveMode);
