@@ -4,7 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>RPSCL — U.P. Demand Supply</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 40'%3E%3Cpolygon points='8,2 2,20 9,20 5,38 20,16 12,16 17,2' fill='%23f0b043'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 26'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23FFB000'/%3E%3Cstop offset='50%25' stop-color='%23FF7A3D'/%3E%3Cstop offset='100%25' stop-color='%23FF5A5F'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M13 1 3 14h8l-1.5 9L20 9h-8l1-8z' fill='url(%23g)'/%3E%3C/svg%3E">
 <style>
   html{ scroll-behavior:smooth; }
   :root{
@@ -582,6 +585,65 @@
   @media (hover:hover) and (pointer:fine){
     .chart-close:hover, .chart-download:hover, .chart-reset:hover, .chart-expand:hover{ border-color:var(--accent); color:var(--accent); }
   }
+  .chart-download:disabled, .chart-reset:disabled, .chart-expand:disabled, .chart-close:disabled{
+    opacity:.35;
+    cursor:not-allowed;
+  }
+
+  /* ---------- LIVE Chart toggle: square button with a red status light ---------- */
+  .live-toggle-btn{
+    position:relative;
+    width:30px;
+    height:30px;
+    border-radius:8px;
+    border:1px solid var(--border);
+    background:var(--panel-2);
+    color:var(--text);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 auto;
+    padding:0;
+    transition:border-color .15s ease, background .15s ease, box-shadow .15s ease;
+  }
+  .live-toggle-btn .live-play-icon{ width:13px; height:13px; }
+  .live-toggle-btn .live-dot{
+    position:absolute;
+    top:-3px;
+    right:-3px;
+    width:8px;
+    height:8px;
+    border-radius:50%;
+    background:#5c2323;
+    transition:background .2s ease;
+  }
+  @media (hover:hover) and (pointer:fine){
+    .live-toggle-btn:hover{ border-color:var(--accent); }
+  }
+  .live-toggle-btn[aria-pressed="true"]{
+    background:var(--panel);
+    border-color:#ff4d4d;
+    /* pressed-in look, clearly distinct from the resting state */
+    box-shadow:
+      inset 0 2px 6px rgba(0,0,0,.5),
+      inset 0 0 0 1px rgba(255,77,77,.35);
+  }
+  .live-toggle-btn[aria-pressed="true"] .live-dot{
+    background:#ff3b3b;
+    animation:live-dot-breathe 2s ease-in-out infinite;
+  }
+  @keyframes live-dot-breathe{
+    0%, 100% { opacity:.22; box-shadow:0 0 2px 0 rgba(255,59,59,.35); }
+    50% { opacity:1; box-shadow:0 0 7px 2px rgba(255,59,59,.9); }
+  }
+  @media (max-width:640px){
+    .live-toggle-btn{ display:none; } /* Live Chart mode is web/desktop only */
+  }
+
+  /* controls locked while LIVE mode is active */
+  .date-nav input[type="date"]:disabled{ opacity:.45; cursor:not-allowed; }
+  .table-toggle:disabled{ opacity:.55; cursor:not-allowed; }
   .chart-reset.breathing{ animation:breathe-btn 500ms ease-in-out; }
   /* soft persistent glow while a chart selection is active — a visual nudge
      toward the way back to "all lines" */
@@ -813,8 +875,15 @@
   <div class="brand">
     <span class="logo-wrap" title="RPSCL">
       <svg viewBox="0 0 132 40" xmlns="http://www.w3.org/2000/svg">
-        <polygon points="8,2 2,20 9,20 5,38 20,16 12,16 17,2" fill="var(--accent)"/>
-        <text x="27" y="27" font-family="Segoe UI, system-ui, sans-serif" font-size="21" font-weight="800" letter-spacing="1" fill="var(--text)">RPSCL</text>
+        <defs>
+          <linearGradient id="rpsclBoltGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FFB000"/>
+            <stop offset="50%" stop-color="#FF7A3D"/>
+            <stop offset="100%" stop-color="#FF5A5F"/>
+          </linearGradient>
+        </defs>
+        <path transform="translate(-1,1) scale(1.05)" d="M13 1 3 14h8l-1.5 9L20 9h-8l1-8z" fill="url(#rpsclBoltGradient)"/>
+        <text x="27" y="27" font-family="'Montserrat', 'Segoe UI', system-ui, sans-serif" font-size="20" font-weight="800" letter-spacing="0.5" fill="var(--text)">RPSCL</text>
       </svg>
     </span>
     <div class="brand-text">
@@ -838,6 +907,10 @@
     </div>
     <div class="chart-legend-row" id="chartLegendRow"></div>
     <div class="chart-head-actions">
+      <button class="live-toggle-btn" id="liveToggleBtn" aria-label="Toggle live 6-hour streaming view" aria-pressed="false" title="Live (last 6 hours)">
+        <svg class="live-play-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        <span class="live-dot" aria-hidden="true"></span>
+      </button>
       <div class="date-nav">
         <button class="arrow" id="prevDay" onclick="stepDate(-1)" aria-label="Previous day">&#8249;</button>
         <span class="date-input-wrap">
@@ -1078,7 +1151,11 @@ async function loadData(silent){
       });
       if(hasDataForNewToday) dateInput.value = isoOf(today());
     }
-    renderForSelectedDate();
+    if(liveModeActive){
+      renderLiveWindowChart(); // date navigation/table stay locked; only the rolling window refreshes
+    } else {
+      renderForSelectedDate();
+    }
   }catch(err){
     // stay silent — no CSV yet is a normal, expected state, not an error to surface
     document.getElementById('downloadBtn').disabled = true;
@@ -1151,6 +1228,34 @@ function setTableExpanded(expanded){
   }
 }
 function toggleTableExpanded(){ setTableExpanded(!tableExpanded); }
+
+// LIVE Chart mode (web only): locks the date-based controls and streams a
+// rolling last-6-hours window instead. Reuses the existing inline chart —
+// there's no separate overlay for this.
+function setLiveMode(active){
+  liveModeActive = active;
+
+  const liveBtn = document.getElementById('liveToggleBtn');
+  if(liveBtn) liveBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+
+  document.getElementById('prevDay').disabled = active;
+  document.getElementById('nextDay').disabled = active;
+  document.getElementById('dateInput').disabled = active;
+  document.getElementById('chartDownloadBtn').disabled = active;
+  document.getElementById('tableToggleBtn').disabled = active;
+
+  const tableToggleSub = document.getElementById('tableToggleSub');
+  if(active){
+    if(tableExpanded) setTableExpanded(false); // stays locked collapsed while live
+    if(tableToggleSub) tableToggleSub.textContent = 'Not available in LIVE Mode';
+    renderLiveWindowChart();
+  } else {
+    const chartSub = document.getElementById('chartSub');
+    if(chartSub) chartSub.style.display = ''; // hand back to the stylesheet default (hidden)
+    renderForSelectedDate(); // restores the calendar-day view and recomputes prev/next disabled state correctly
+  }
+}
+function toggleLiveMode(){ setLiveMode(!liveModeActive); }
 
 // Copy only makes sense once there's a meaningful amount of data; Download CSV
 // and Copy both only show once the table itself is actually expanded.
@@ -1292,6 +1397,10 @@ let fullscreenChart = null;
 let lastChartISO = null;
 let selectedLabels = new Set();
 
+/* ---------- LIVE Chart mode (web only): rolling last-6-hours stream ---------- */
+let liveModeActive = false;
+let liveWindowCutoff = null; // Date — start of the current 6-hour window, used to format x-axis ticks while live
+
 function getAGSeriesMeta(){
   const metas = [];
   rawHeader.forEach((h,i)=>{
@@ -1401,6 +1510,94 @@ function buildChartData(rowsForDate){
     datasets.push({
       label: 'Total Demand',
       data: sorted.map((r,idx) => ({ x: xValues[idx], y: parseFloat(r[demandIdx]) })),
+      borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
+      backgroundColor: 'transparent',
+      yAxisID: 'yDemand',
+      borderDash: [6,4],
+      borderWidth: 2.5,
+      tension: .35,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      spanGaps: true,
+    });
+  }
+  return { labels, datasets };
+}
+
+// A row's real Date+time (not just time-of-day), needed for the LIVE window
+// since its rolling 6-hour range can span across midnight.
+function parseRowDateTime(row){
+  const d = parseCellDate(row[0]);
+  if(!d) return null;
+  const parts = String(row[timeColIdx] || '00:00').split(':');
+  const hh = parseInt(parts[0],10) || 0;
+  const mm = parseInt(parts[1],10) || 0;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), hh, mm, 0, 0);
+}
+
+function formatMinutesFromCutoff(v){
+  if(!liveWindowCutoff) return formatMinutesAsHHMM(v);
+  const dt = new Date(liveWindowCutoff.getTime() + v * 60000);
+  return String(dt.getHours()).padStart(2,'0') + ':' + String(dt.getMinutes()).padStart(2,'0');
+}
+
+// Builds chart data for the LIVE mode's rolling last-6-hours window, pulled
+// from across all loaded dates (not just the currently selected one) since
+// the window can span a midnight boundary. x-values are minutes elapsed
+// since the window's start, which stays correct across that boundary —
+// unlike minutes-since-midnight, which would wrap around incorrectly.
+function buildLiveWindowChartData(){
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+  liveWindowCutoff = cutoff;
+
+  const rowsInWindow = allRows
+    .map(r => ({ row: r, dt: parseRowDateTime(r) }))
+    .filter(o => o.dt && o.dt >= cutoff && o.dt <= now)
+    .sort((a,b) => a.dt - b.dt);
+
+  const labels = rowsInWindow.map(o =>
+    String(o.dt.getHours()).padStart(2,'0') + ':' + String(o.dt.getMinutes()).padStart(2,'0')
+  );
+  const xValues = rowsInWindow.map(o => (o.dt - cutoff) / 60000);
+  const agMetas = getAGSeriesMeta();
+
+  const agDatasets = agMetas.map((m,i)=>({
+    label: m.label,
+    data: rowsInWindow.map((o,idx) => ({ x: xValues[idx], y: parseFloat(o.row[m.idx]) })),
+    borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
+    yAxisID: 'yAG',
+    tension: .35,
+    borderWidth: 2,
+    pointRadius: 0,
+    pointHoverRadius: 5,
+    spanGaps: true,
+  }));
+
+  const datasets = agDatasets.slice();
+
+  const solarIdx = getSolarGenIdx();
+  if(solarIdx >= 0){
+    datasets.push({
+      label: 'Solar Gen',
+      data: rowsInWindow.map((o,idx) => ({ x: xValues[idx], y: parseFloat(o.row[solarIdx]) })),
+      borderColor: SOLAR_COLOR,
+      backgroundColor: SOLAR_COLOR,
+      yAxisID: 'yAG',
+      tension: .35,
+      borderWidth: 2.5,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      spanGaps: true,
+    });
+  }
+
+  const demandIdx = getTotalDemandIdx();
+  if(demandIdx >= 0){
+    datasets.push({
+      label: 'Total Demand',
+      data: rowsInWindow.map((o,idx) => ({ x: xValues[idx], y: parseFloat(o.row[demandIdx]) })),
       borderColor: getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
       backgroundColor: 'transparent',
       yAxisID: 'yDemand',
@@ -1565,7 +1762,7 @@ function syncChartLayout(){
 
 function updateChartTitle(){
   const isToday = selectedISO === isoOf(today());
-  const label = isToday ? 'Live Chart' : 'Historical Chart';
+  const label = (liveModeActive || isToday) ? 'Live Chart' : 'Historical Chart';
   const titleEl = document.getElementById('chartTitle');
   if(titleEl) titleEl.textContent = label;
   const fsTitleEl = document.getElementById('fullscreenChartTitle');
@@ -1590,6 +1787,43 @@ function mergeDataIntoChart(chart, labels, datasets){
   chart.data.datasets.length = datasets.length;
 }
 
+// Applies a freshly-built {labels, datasets} pair to whichever chart
+// instance(s) currently exist — creating the inline chart on first use,
+// merging in place afterward. Shared by both the normal calendar-day view
+// and the LIVE 6-hour rolling window, so both stay perfectly in sync with
+// the fullscreen view too.
+function applyChartData(labels, datasets, resetSelection){
+  if(resetSelection) selectedLabels = new Set();
+  updateChartTitle();
+
+  if(!liveChart){
+    datasets.forEach(tagOriginalStyle);
+    const ctx = document.getElementById('liveChartCanvas').getContext('2d');
+    liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
+    updateResetButtonVisibility();
+    // two follow-up resizes: the layout may not have fully settled on the
+    // very first paint (slow/cold loads), so a single quick check isn't
+    // always enough — this costs nothing if the first one was already right
+    setTimeout(() => forceChartResize(liveChart, '.chart-canvas-wrap'), 60);
+    setTimeout(() => forceChartResize(liveChart, '.chart-canvas-wrap'), 400);
+  } else {
+    datasets.forEach(tagOriginalStyle);
+    mergeDataIntoChart(liveChart, labels, datasets);
+  }
+
+  if(fullscreenChart){
+    // an independent copy for the second canvas, so Chart.js's own internal
+    // per-instance state never cross-contaminates between the two
+    const fsLabels = labels.slice();
+    const fsDatasets = JSON.parse(JSON.stringify(datasets));
+    fsDatasets.forEach(tagOriginalStyle);
+    mergeDataIntoChart(fullscreenChart, fsLabels, fsDatasets);
+  }
+
+  applySelectionStyling(); // applies to whichever chart instance(s) currently exist
+  updateResetButtonVisibility();
+}
+
 // The inline chart is always visible on the page (not a modal) — this
 // creates it once on first data, then just updates it in place on every
 // subsequent render (date change, live 60s refresh, etc). If the fullscreen
@@ -1600,43 +1834,44 @@ function initOrUpdateLiveChart(rowsForDate){
 
   const dateChanged = lastChartISO !== selectedISO;
   lastChartISO = selectedISO;
-  if(dateChanged) selectedLabels = new Set(); // a new day's chart starts unfiltered
 
-  updateChartTitle();
-
-  if(!liveChart){
-    const { labels, datasets } = buildTaggedDatasets(rowsForDate);
-    const ctx = document.getElementById('liveChartCanvas').getContext('2d');
-    liveChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions() });
-    updateResetButtonVisibility();
-    // two follow-up resizes: the layout may not have fully settled on the
-    // very first paint (slow/cold loads), so a single quick check isn't
-    // always enough — this costs nothing if the first one was already right
-    setTimeout(() => forceChartResize(liveChart, '.chart-canvas-wrap'), 60);
-    setTimeout(() => forceChartResize(liveChart, '.chart-canvas-wrap'), 400);
-  } else {
-    const { labels, datasets } = buildTaggedDatasets(rowsForDate);
-    mergeDataIntoChart(liveChart, labels, datasets);
-  }
-
-  if(fullscreenChart){
-    const fsData = buildTaggedDatasets(rowsForDate); // independent copy for the second canvas
-    mergeDataIntoChart(fullscreenChart, fsData.labels, fsData.datasets);
-  }
-
-  applySelectionStyling(); // applies to whichever chart instance(s) currently exist
-  updateResetButtonVisibility();
+  const { labels, datasets } = buildChartData(rowsForDate);
+  applyChartData(labels, datasets, dateChanged);
 }
+
+// LIVE mode: rebuilds the rolling last-6-hours window and pushes it into
+// whichever chart instance(s) exist. Never resets the line selection on its
+// own (a live refresh shouldn't undo what the person is looking at).
+function renderLiveWindowChart(){
+  if(typeof Chart === 'undefined') return;
+  const { labels, datasets } = buildLiveWindowChartData();
+  const chartSub = document.getElementById('chartSub');
+  if(chartSub){ chartSub.textContent = 'Last 6 hours'; chartSub.style.display = 'block'; }
+  applyChartData(labels, datasets, false);
+}
+
 
 // Opens a larger, clearer full-screen version of the chart (vertical layout
 // only — no rotation). Always renders non-compact (bigger fonts/legend/axis
 // titles) since there's more room, regardless of device width.
 function openFullscreenChart(){
-  const rowsForDate = currentRowsForSelectedDate();
-  if(rowsForDate.length === 0){ alert('No data to chart for this date yet.'); return; }
-  if(typeof Chart === 'undefined'){ alert('Chart library failed to load — check your connection and try again.'); return; }
+  let labels, datasets;
+  if(liveModeActive){
+    const built = buildLiveWindowChartData();
+    labels = built.labels;
+    datasets = built.datasets;
+    if(labels.length === 0){ alert('No data in the last 6 hours yet.'); return; }
+    if(typeof Chart === 'undefined'){ alert('Chart library failed to load — check your connection and try again.'); return; }
+    datasets.forEach(tagOriginalStyle);
+  } else {
+    const rowsForDate = currentRowsForSelectedDate();
+    if(rowsForDate.length === 0){ alert('No data to chart for this date yet.'); return; }
+    if(typeof Chart === 'undefined'){ alert('Chart library failed to load — check your connection and try again.'); return; }
+    const built = buildTaggedDatasets(rowsForDate);
+    labels = built.labels;
+    datasets = built.datasets;
+  }
 
-  const { labels, datasets } = buildTaggedDatasets(rowsForDate);
   const ctx = document.getElementById('fullscreenChartCanvas').getContext('2d');
   if(fullscreenChart) fullscreenChart.destroy();
   fullscreenChart = new Chart(ctx, { type:'line', data:{ labels, datasets }, options: buildChartOptions(false, true) });
@@ -1901,7 +2136,7 @@ function buildChartOptions(forceCompact, forceLegend){
         padding:10,
         filter:(item)=> selectedLabels.size === 0 || selectedLabels.has(item.dataset.label),
         callbacks:{
-          title:(items)=> items.length ? formatMinutesAsHHMM(items[0].parsed.x) : ''
+          title:(items)=> items.length ? (liveModeActive ? formatMinutesFromCutoff(items[0].parsed.x) : formatMinutesAsHHMM(items[0].parsed.x)) : ''
         }
       }
     },
@@ -1913,7 +2148,7 @@ function buildChartOptions(forceCompact, forceLegend){
         // axis's rendered range out past the real last data point — this pins
         // it strictly to the actual data extent instead, so no dead space
         bounds:'data',
-        ticks:{ color:c.muted, maxRotation:0, font:{ size: compact ? 9 : 11 }, callback:(v)=>formatMinutesAsHHMM(v) },
+        ticks:{ color:c.muted, maxRotation:0, font:{ size: compact ? 9 : 11 }, callback:(v)=> liveModeActive ? formatMinutesFromCutoff(v) : formatMinutesAsHHMM(v) },
         grid:{ color:c.border },
         afterBuildTicks: (axis) => buildEquidistantTicks(axis, compact ? 10 : 24)
       },
@@ -1943,6 +2178,7 @@ function currentRowsForSelectedDate(){
 document.getElementById('chartDownloadBtn').addEventListener('click', openDownloadOptions);
 document.getElementById('chartResetBtn').addEventListener('click', clearSelection);
 document.getElementById('chartExpandBtn').addEventListener('click', openFullscreenChart);
+document.getElementById('liveToggleBtn').addEventListener('click', toggleLiveMode);
 document.getElementById('fullscreenResetBtn').addEventListener('click', clearSelection);
 document.getElementById('fullscreenDownloadBtn').addEventListener('click', openDownloadOptions);
 document.getElementById('fullscreenCloseBtn').addEventListener('click', closeFullscreenChart);
