@@ -610,6 +610,9 @@
     flex:0 0 auto;
     padding:0;
     transition:border-color .15s ease, background .15s ease, box-shadow .15s ease;
+    /* flat at rest — no shadow at all, same plain look as every other icon
+       button (like the date-nav arrows); the shadow only appears once
+       pressed, which is what actually signals the state change */
   }
   .live-toggle-btn .live-play-icon{ width:12px; height:12px; flex:0 0 auto; }
   .live-toggle-btn .live-dot{
@@ -622,15 +625,32 @@
     transition:background .2s ease;
   }
   /* no colored border in any state — hover, focus, or pressed — the pressed
-     look comes purely from an inset "grooved in" shadow, nothing else */
+     look comes purely from shadow, nothing else. */
   .live-toggle-btn:focus-visible{ outline:none; }
   .live-toggle-btn[aria-pressed="true"]{
     background:var(--panel);
     border-color:var(--border);
     box-shadow:
-      inset 0 2px 5px rgba(0,0,0,.55),
-      inset 0 1px 2px rgba(0,0,0,.4),
+      inset 0 3px 7px rgba(0,0,0,.6),
+      inset 0 1px 3px rgba(0,0,0,.45),
       inset 0 -1px 0 rgba(255,255,255,.03);
+  }
+  /* Dark mode only: a directional "pressed switch" look — as if lit by pale
+     moonlight from the right, seen slightly from below. The deep dark
+     shadow sits opposite the light (upper-left interior), a cool pale rim
+     catches on the right/lower interior edge where that light would graze
+     in, and the underside (top edge, as seen looking up from below) stays
+     darkest of all. */
+  html[data-theme="dark"] .live-toggle-btn[aria-pressed="true"]{
+    background:#131316;
+    box-shadow:
+      inset 3px 3px 7px rgba(0,0,0,.85),
+      inset 0 5px 7px rgba(0,0,0,.65),
+      inset -3px -2px 6px rgba(185,200,225,.16),
+      inset -1px -1px 2px rgba(210,220,240,.12);
+  }
+  html[data-theme="dark"] .live-toggle-btn[aria-pressed="true"] .live-play-icon{
+    filter:drop-shadow(-0.5px -0.5px 0 rgba(185,200,225,.25));
   }
   .live-toggle-btn[aria-pressed="true"] .live-dot{
     background:#ff3b3b;
@@ -1887,9 +1907,7 @@ function initOrUpdateLiveChart(rowsForDate){
 function renderLiveWindowChart(){
   if(typeof Chart === 'undefined') return;
   const { labels, datasets } = buildLiveWindowChartData();
-  const chartSub = document.getElementById('chartSub');
-  if(chartSub){ chartSub.textContent = 'Last 6 hours'; chartSub.style.display = 'block'; }
-  applyChartData(labels, datasets, false);
+  applyChartData(labels, datasets, false); // title stays just "Live Chart" — no subtitle in this mode
 }
 
 
