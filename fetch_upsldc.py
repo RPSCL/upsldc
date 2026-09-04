@@ -126,7 +126,7 @@ def compact_csv():
 
     today = datetime.now().date()
     yesterday = today - timedelta(days=1)
-    ten_day_start = yesterday - timedelta(days=10)
+    ten_day_start = yesterday - timedelta(days=20)
 
     retained_rows = []
 
