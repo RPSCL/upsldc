@@ -23,7 +23,7 @@ import requests
 MAIN_URL = "https://www.upsldc.org/assets/dataset/realtime.json"
 SUMMARY_URL = "https://www.upsldc.org/assets/dataset/real-time-summary.json"
 
-BOT_TOKEN = "5588744140:AAFMzYGBbQDzZ_hYDf9d1WSTHmC3I-Z3kZk"
+BOT_TOKEN = "5588744140:AAFMzYGBbQDzZ_hYDf9d1WSTHmC3I-Z3kZk#"
 TST_ID = "-1003175374557"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
