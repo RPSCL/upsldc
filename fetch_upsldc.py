@@ -125,8 +125,8 @@ def compact_csv():
     data_rows = rows[1:] if rows and rows[0] == expected_header else rows
 
     today = datetime.now().date()
-    yesterday = today - timedelta(days=1)
-    ten_day_start = yesterday - timedelta(days=20)
+    yesterday = today - timedelta(days=10)
+    ten_day_start = yesterday - timedelta(days=30)
 
     retained_rows = []
 
