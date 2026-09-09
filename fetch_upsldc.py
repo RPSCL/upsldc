@@ -8,11 +8,16 @@ At 00:00 every day:
 - Older data is reduced to hourly frequency.
 - Data older than 120 days is moved to historical.csv.
 
-Additional protection:
-- On every startup, rows containing more than 20 zero values
-  are deleted from upsldc_hourly_data.csv.
-- New rows containing more than 20 zero values are not written
-  and are not sent to Telegram.
+Additional data protection:
+1. Rows having more than 20 zero values are removed on startup.
+2. New rows having more than 20 zero values are rejected.
+3. If a numeric value remains exactly the same for more than 2
+   consecutive rows, it is considered potentially stuck.
+4. Once a different value appears after the stuck section, the
+   stuck values are linearly interpolated between the value before
+   and the value after the stuck section.
+5. If the stuck section is at the end of the CSV, it is not changed
+   until a recovery/different value becomes available.
 """
 
 import os
@@ -24,6 +29,10 @@ from urllib.parse import quote
 import requests
 
 
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
 MAIN_URL = "https://www.upsldc.org/assets/dataset/realtime.json"
 SUMMARY_URL = "https://www.upsldc.org/assets/dataset/real-time-summary.json"
 
@@ -31,13 +40,27 @@ BOT_TOKEN = "5588744140:AAFMzYGBbQDzZ_hYDf9d1WSTHmC3I-Z3kZk#"
 TST_ID = "-1003175374557"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-OUTPUT_CSV = os.path.join(BASE_DIR, "upsldc_hourly_data.csv")
-HISTORICAL_CSV = os.path.join(BASE_DIR, "historical.csv")
+
+OUTPUT_CSV = os.path.join(
+    BASE_DIR,
+    "upsldc_hourly_data.csv"
+)
+
+HISTORICAL_CSV = os.path.join(
+    BASE_DIR,
+    "historical.csv"
+)
+
+
+# ============================================================
+# HTTP SETTINGS
+# ============================================================
 
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0 Safari/537.36"
     )
 }
 
@@ -45,6 +68,11 @@ PROXY_URL_TEMPLATES = [
     "https://api.codetabs.com/v1/proxy?quest={target}",
     "https://api.allorigins.win/raw?url={target}",
 ]
+
+
+# ============================================================
+# PLANT CONFIGURATION
+# ============================================================
 
 PLANT_SEQUENCE = [
     "MEJA",
@@ -56,6 +84,7 @@ PLANT_SEQUENCE = [
     "ROSA 1",
     "ROSA 2"
 ]
+
 
 PLANT_MAPPING = {
     "MEJA": "MejaUrjaNigamPvtLtd",
@@ -69,10 +98,21 @@ PLANT_MAPPING = {
 }
 
 
+# ============================================================
+# CSV HEADER
+# ============================================================
+
 def header_row():
-    header = ["Date", "Time", "TOTAL_DEMAND", "SOLAR_GEN"]
+
+    header = [
+        "Date",
+        "Time",
+        "TOTAL_DEMAND",
+        "SOLAR_GEN"
+    ]
 
     for key in PLANT_SEQUENCE:
+
         header += [
             f"{key}_DC",
             f"{key}_SG",
@@ -82,37 +122,51 @@ def header_row():
     return header
 
 
+# ============================================================
+# BASIC HELPERS
+# ============================================================
+
 def clean(s):
-    return (s or "").lower().replace(" ", "")
+
+    return (
+        s or ""
+    ).lower().replace(" ", "")
 
 
 def count_zero_values(row):
     """
-    Count numeric zero values in a row.
+    Count numeric zero values.
 
     Date and Time are ignored.
-    Counting starts from column 3:
-    TOTAL_DEMAND, SOLAR_GEN, and all plant values.
+    Counting starts from TOTAL_DEMAND.
     """
 
     zero_count = 0
 
     for cell in row[2:]:
+
         try:
+
             if float(cell) == 0:
                 zero_count += 1
+
         except (ValueError, TypeError):
+
             pass
 
     return zero_count
 
 
+# ============================================================
+# REMOVE BAD ZERO ROWS
+# ============================================================
+
 def remove_zero_rows():
     """
-    Run every time the script starts.
+    Runs every time the script starts.
 
-    Delete any existing CSV row containing more than 20
-    numeric zero values.
+    Deletes any existing row containing more than
+    20 numeric zero values.
     """
 
     if not os.path.exists(OUTPUT_CSV):
@@ -121,39 +175,63 @@ def remove_zero_rows():
     expected_header = header_row()
 
     try:
+
         with open(
             OUTPUT_CSV,
             "r",
             newline="",
             encoding="utf-8"
         ) as f:
-            rows = list(csv.reader(f))
+
+            rows = list(
+                csv.reader(f)
+            )
 
         if not rows:
             return
 
-        # Remove header from data rows if it matches.
         if rows[0] == expected_header:
+
             data_rows = rows[1:]
+
         else:
+
             data_rows = rows
 
         retained_rows = []
+
         removed_count = 0
 
         for row in data_rows:
 
-            # Ignore blank rows.
-            if not row or not any(cell.strip() for cell in row):
+            if (
+                not row
+                or not any(
+                    cell.strip()
+                    for cell in row
+                )
+            ):
                 continue
 
-            zero_count = count_zero_values(row)
+            zero_count = count_zero_values(
+                row
+            )
 
             if zero_count > 20:
+
                 removed_count += 1
 
-                date_value = row[0] if len(row) > 0 else "Unknown"
-                time_value = row[1] if len(row) > 1 else "Unknown"
+                date_value = (
+                    row[0]
+                    if len(row) > 0
+                    else "Unknown"
+                )
+
+                time_value = (
+                    row[1]
+                    if len(row) > 1
+                    else "Unknown"
+                )
 
                 print(
                     f"Removed bad row: "
@@ -162,19 +240,25 @@ def remove_zero_rows():
                 )
 
             else:
+
                 retained_rows.append(row)
 
-        # Rewrite the CSV with only valid rows.
         with open(
             OUTPUT_CSV,
             "w",
             newline="",
             encoding="utf-8"
         ) as f:
+
             writer = csv.writer(f)
 
-            writer.writerow(expected_header)
-            writer.writerows(retained_rows)
+            writer.writerow(
+                expected_header
+            )
+
+            writer.writerows(
+                retained_rows
+            )
 
         print(
             f"Zero-value cleanup complete: "
@@ -182,21 +266,344 @@ def remove_zero_rows():
         )
 
     except Exception as e:
-        print(f"Could not remove zero-value rows: {e}")
+
+        print(
+            f"Could not remove zero-value rows: {e}"
+        )
 
 
-def last_row_is_recent():
+# ============================================================
+# SMOOTH STUCK DATA
+# ============================================================
+
+def smooth_stuck_values():
+    """
+    Detects values that remain exactly the same for
+    MORE THAN 2 consecutive rows.
+
+    Example:
+
+        07:30   1325
+        07:35   1325
+        07:40   1325
+        07:45   1325
+        07:50   1100
+
+    The 4 repeated values are considered stuck.
+
+    They are replaced by linearly interpolated values
+    between 1325 and 1100.
+
+    The Date and Time columns are never modified.
+
+    A stuck section at the END of the CSV is left alone
+    until a different/recovery value becomes available.
+    """
+
     if not os.path.exists(OUTPUT_CSV):
-        return False
+        return
+
+    expected_header = header_row()
 
     try:
+
         with open(
             OUTPUT_CSV,
             "r",
             newline="",
             encoding="utf-8"
         ) as f:
-            rows = list(csv.reader(f))
+
+            rows = list(
+                csv.reader(f)
+            )
+
+        if len(rows) < 5:
+            return
+
+        if rows[0] != expected_header:
+
+            print(
+                "Smoothing skipped: "
+                "CSV header does not match expected header."
+            )
+
+            return
+
+        data_rows = rows[1:]
+
+        if len(data_rows) < 4:
+            return
+
+        changed_count = 0
+
+        # ----------------------------------------------------
+        # Process each numeric column independently.
+        #
+        # Columns:
+        # 0 = Date
+        # 1 = Time
+        # 2 onward = numeric data
+        # ----------------------------------------------------
+
+        for col in range(2, len(expected_header)):
+
+            i = 1
+
+            while i < len(data_rows) - 1:
+
+                # Try to read current value.
+                try:
+
+                    current_value = float(
+                        data_rows[i][col]
+                    )
+
+                except (
+                    ValueError,
+                    TypeError,
+                    IndexError
+                ):
+
+                    i += 1
+                    continue
+
+                # ------------------------------------------------
+                # Find how many consecutive rows have exactly
+                # the same value.
+                # ------------------------------------------------
+
+                run_start = i
+                run_end = i
+
+                while (
+                    run_end + 1 < len(data_rows)
+                ):
+
+                    try:
+
+                        next_value = float(
+                            data_rows[
+                                run_end + 1
+                            ][col]
+                        )
+
+                    except (
+                        ValueError,
+                        TypeError,
+                        IndexError
+                    ):
+
+                        break
+
+                    if next_value == current_value:
+
+                        run_end += 1
+
+                    else:
+
+                        break
+
+                run_length = (
+                    run_end - run_start + 1
+                )
+
+                # ------------------------------------------------
+                # Only act if MORE THAN 2 rows have same value.
+                # Therefore minimum run = 3 rows.
+                # ------------------------------------------------
+
+                if run_length >= 3:
+
+                    # Need a valid value BEFORE the stuck section.
+                    if run_start <= 0:
+
+                        i = run_end + 1
+                        continue
+
+                    try:
+
+                        before_value = float(
+                            data_rows[
+                                run_start - 1
+                            ][col]
+                        )
+
+                    except (
+                        ValueError,
+                        TypeError,
+                        IndexError
+                    ):
+
+                        i = run_end + 1
+                        continue
+
+                    # ------------------------------------------------
+                    # Need a recovery value AFTER the stuck section.
+                    #
+                    # If run_end is the final row, the website may
+                    # still be stuck. Do NOT alter it yet.
+                    # ------------------------------------------------
+
+                    if run_end + 1 >= len(data_rows):
+
+                        i = run_end + 1
+                        continue
+
+                    try:
+
+                        after_value = float(
+                            data_rows[
+                                run_end + 1
+                            ][col]
+                        )
+
+                    except (
+                        ValueError,
+                        TypeError,
+                        IndexError
+                    ):
+
+                        i = run_end + 1
+                        continue
+
+                    # ------------------------------------------------
+                    # If before and after are also the same,
+                    # this is not a useful stuck transition.
+                    # ------------------------------------------------
+
+                    if (
+                        before_value
+                        == current_value
+                        == after_value
+                    ):
+
+                        i = run_end + 1
+                        continue
+
+                    # ------------------------------------------------
+                    # Interpolate the stuck values.
+                    #
+                    # Example:
+                    #
+                    # Before = 1325
+                    # Stuck rows = 4
+                    # After = 1100
+                    #
+                    # The 4 values are distributed evenly between
+                    # 1325 and 1100.
+                    # ------------------------------------------------
+
+                    total_steps = (
+                        run_length + 1
+                    )
+
+                    for k in range(
+                        1,
+                        run_length + 1
+                    ):
+
+                        interpolated = (
+                            before_value
+                            + (
+                                after_value
+                                - before_value
+                            )
+                            * k
+                            / total_steps
+                        )
+
+                        # Keep whole-number MW values.
+                        interpolated = round(
+                            interpolated
+                        )
+
+                        data_rows[
+                            run_start + k - 1
+                        ][col] = str(
+                            interpolated
+                        )
+
+                        changed_count += 1
+
+                    print(
+                        f"Smoothed "
+                        f"{expected_header[col]}: "
+                        f"{data_rows[run_start][0]} "
+                        f"{data_rows[run_start][1]} "
+                        f"to "
+                        f"{data_rows[run_end][0]} "
+                        f"{data_rows[run_end][1]} | "
+                        f"{run_length} repeated values | "
+                        f"{before_value} -> "
+                        f"{after_value}"
+                    )
+
+                i = run_end + 1
+
+        # ----------------------------------------------------
+        # Write modified CSV back.
+        # ----------------------------------------------------
+
+        if changed_count > 0:
+
+            with open(
+                OUTPUT_CSV,
+                "w",
+                newline="",
+                encoding="utf-8"
+            ) as f:
+
+                writer = csv.writer(f)
+
+                writer.writerow(
+                    expected_header
+                )
+
+                writer.writerows(
+                    data_rows
+                )
+
+            print(
+                f"Data smoothing complete: "
+                f"{changed_count} values corrected"
+            )
+
+        else:
+
+            print(
+                "Data smoothing: "
+                "no stuck values requiring correction"
+            )
+
+    except Exception as e:
+
+        print(
+            f"Could not smooth stuck values: {e}"
+        )
+
+
+# ============================================================
+# CHECK LAST ROW
+# ============================================================
+
+def last_row_is_recent():
+
+    if not os.path.exists(OUTPUT_CSV):
+        return False
+
+    try:
+
+        with open(
+            OUTPUT_CSV,
+            "r",
+            newline="",
+            encoding="utf-8"
+        ) as f:
+
+            rows = list(
+                csv.reader(f)
+            )
 
         if len(rows) < 2:
             return False
@@ -204,20 +611,41 @@ def last_row_is_recent():
         last_row = None
 
         for row in reversed(rows[1:]):
-            if row and any(cell.strip() for cell in row):
+
+            if (
+                row
+                and any(
+                    cell.strip()
+                    for cell in row
+                )
+            ):
+
                 last_row = row
                 break
 
-        if not last_row or len(last_row) < 2:
+        if (
+            not last_row
+            or len(last_row) < 2
+        ):
+
             return False
 
         last_datetime = datetime.strptime(
-            last_row[0].strip() + " " + last_row[1].strip(),
+            last_row[0].strip()
+            + " "
+            + last_row[1].strip(),
             "%d-%b-%y %H:%M"
         )
 
-        age = datetime.now() - last_datetime
-        age_minutes = age.total_seconds() / 60
+        age = (
+            datetime.now()
+            - last_datetime
+        )
+
+        age_minutes = (
+            age.total_seconds()
+            / 60
+        )
 
         print(
             f"Last CSV row time: "
@@ -229,7 +657,10 @@ def last_row_is_recent():
             f"{age_minutes:.1f} minutes"
         )
 
-        if age <= timedelta(minutes=5):
+        if age <= timedelta(
+            minutes=5
+        ):
+
             print(
                 "Last row is within 5 minutes. "
                 "Skipping UPSLDC fetch."
@@ -240,12 +671,23 @@ def last_row_is_recent():
         return False
 
     except Exception as e:
-        print(f"Could not check last CSV row: {e}")
+
+        print(
+            f"Could not check last CSV row: {e}"
+        )
+
         return False
 
 
+# ============================================================
+# DAILY CSV COMPACTION
+# ============================================================
+
 def compact_csv():
-    if not os.path.exists(OUTPUT_CSV):
+
+    if not os.path.exists(
+        OUTPUT_CSV
+    ):
         return
 
     expected_header = header_row()
@@ -256,28 +698,45 @@ def compact_csv():
         newline="",
         encoding="utf-8"
     ) as f:
-        rows = list(csv.reader(f))
+
+        rows = list(
+            csv.reader(f)
+        )
 
     data_rows = (
         rows[1:]
-        if rows and rows[0] == expected_header
+        if rows
+        and rows[0] == expected_header
         else rows
     )
 
     today = datetime.now().date()
 
-    yesterday = today - timedelta(days=10)
+    yesterday = (
+        today
+        - timedelta(days=10)
+    )
 
-    ten_day_start = yesterday - timedelta(days=30)
+    ten_day_start = (
+        yesterday
+        - timedelta(days=30)
+    )
 
     retained_rows = []
 
     for row in data_rows:
 
-        if not row or not any(cell.strip() for cell in row):
+        if (
+            not row
+            or not any(
+                cell.strip()
+                for cell in row
+            )
+        ):
             continue
 
         try:
+
             row_date = datetime.strptime(
                 row[0].strip(),
                 "%d-%b-%y"
@@ -288,27 +747,48 @@ def compact_csv():
                 "%H:%M"
             ).time()
 
-            # Yesterday and today:
-            # Keep all 5-minute data.
-            if row_date >= yesterday:
-                retained_rows.append(row)
+            # ------------------------------------------------
+            # Recent data
+            # ------------------------------------------------
 
-            # Previous period:
-            # Keep 15-minute data.
+            if row_date >= yesterday:
+
+                retained_rows.append(
+                    row
+                )
+
+            # ------------------------------------------------
+            # Previous period
+            # ------------------------------------------------
+
             elif row_date >= ten_day_start:
 
                 if row_time.minute % 15 == 0:
-                    retained_rows.append(row)
 
-            # Older data:
-            # Keep hourly data only.
+                    retained_rows.append(
+                        row
+                    )
+
+            # ------------------------------------------------
+            # Older data
+            # ------------------------------------------------
+
             else:
 
                 if row_time.minute == 0:
-                    retained_rows.append(row)
 
-        except (ValueError, IndexError):
-            retained_rows.append(row)
+                    retained_rows.append(
+                        row
+                    )
+
+        except (
+            ValueError,
+            IndexError
+        ):
+
+            retained_rows.append(
+                row
+            )
 
     with open(
         OUTPUT_CSV,
@@ -319,9 +799,13 @@ def compact_csv():
 
         writer = csv.writer(f)
 
-        writer.writerow(expected_header)
+        writer.writerow(
+            expected_header
+        )
 
-        writer.writerows(retained_rows)
+        writer.writerows(
+            retained_rows
+        )
 
     print(
         f"CSV compacted: "
@@ -329,10 +813,21 @@ def compact_csv():
     )
 
 
+# ============================================================
+# PREPARE CSV / MOVE OLD DATA
+# ============================================================
+
 def prepare_csv():
+
     expected_header = header_row()
 
-    if not os.path.exists(OUTPUT_CSV):
+    # --------------------------------------------------------
+    # Create CSV if it does not exist.
+    # --------------------------------------------------------
+
+    if not os.path.exists(
+        OUTPUT_CSV
+    ):
 
         with open(
             OUTPUT_CSV,
@@ -341,9 +836,15 @@ def prepare_csv():
             encoding="utf-8"
         ) as f:
 
-            csv.writer(f).writerow(expected_header)
+            csv.writer(f).writerow(
+                expected_header
+            )
 
         return
+
+    # --------------------------------------------------------
+    # Read existing CSV.
+    # --------------------------------------------------------
 
     with open(
         OUTPUT_CSV,
@@ -352,11 +853,14 @@ def prepare_csv():
         encoding="utf-8"
     ) as f:
 
-        rows = list(csv.reader(f))
+        rows = list(
+            csv.reader(f)
+        )
 
     data_rows = (
         rows[1:]
-        if rows and rows[0] == expected_header
+        if rows
+        and rows[0] == expected_header
         else rows
     )
 
@@ -366,27 +870,51 @@ def prepare_csv():
     )
 
     valid_rows = []
+
     historical_rows = []
 
     for row in data_rows:
 
-        if not row or not any(cell.strip() for cell in row):
+        if (
+            not row
+            or not any(
+                cell.strip()
+                for cell in row
+            )
+        ):
             continue
 
         try:
+
             row_date = datetime.strptime(
                 row[0].strip(),
                 "%d-%b-%y"
             ).date()
 
             if row_date < cutoff_date:
-                historical_rows.append(row)
+
+                historical_rows.append(
+                    row
+                )
 
             else:
-                valid_rows.append(row)
 
-        except (ValueError, IndexError):
-            valid_rows.append(row)
+                valid_rows.append(
+                    row
+                )
+
+        except (
+            ValueError,
+            IndexError
+        ):
+
+            valid_rows.append(
+                row
+            )
+
+    # --------------------------------------------------------
+    # Move old data to historical.csv.
+    # --------------------------------------------------------
 
     if historical_rows:
 
@@ -405,16 +933,28 @@ def prepare_csv():
 
             if (
                 not historical_exists
-                or os.path.getsize(HISTORICAL_CSV) == 0
+                or os.path.getsize(
+                    HISTORICAL_CSV
+                ) == 0
             ):
-                writer.writerow(expected_header)
 
-            writer.writerows(historical_rows)
+                writer.writerow(
+                    expected_header
+                )
+
+            writer.writerows(
+                historical_rows
+            )
 
         print(
-            f"Moved {len(historical_rows)} "
+            f"Moved "
+            f"{len(historical_rows)} "
             f"rows to historical.csv"
         )
+
+    # --------------------------------------------------------
+    # Rewrite main CSV.
+    # --------------------------------------------------------
 
     with open(
         OUTPUT_CSV,
@@ -425,18 +965,31 @@ def prepare_csv():
 
         writer = csv.writer(f)
 
-        writer.writerow(expected_header)
+        writer.writerow(
+            expected_header
+        )
 
-        writer.writerows(valid_rows)
+        writer.writerows(
+            valid_rows
+        )
 
+
+# ============================================================
+# FETCH JSON
+# ============================================================
 
 def fetch_json(url):
+
     last_error = None
 
-    # Try direct connection three times.
+    # --------------------------------------------------------
+    # Direct attempts
+    # --------------------------------------------------------
+
     for attempt in range(3):
 
         try:
+
             resp = requests.get(
                 url,
                 headers=HEADERS,
@@ -453,7 +1006,8 @@ def fetch_json(url):
 
             print(
                 f"Direct fetch attempt "
-                f"{attempt + 1}/3 failed for {url}: {e}"
+                f"{attempt + 1}/3 failed "
+                f"for {url}: {e}"
             )
 
             time.sleep(2)
@@ -463,11 +1017,17 @@ def fetch_json(url):
         f"falling back to proxies for {url}"
     )
 
-    # Try proxy connections.
+    # --------------------------------------------------------
+    # Proxy attempts
+    # --------------------------------------------------------
+
     for template in PROXY_URL_TEMPLATES:
 
         proxied_url = template.format(
-            target=quote(url, safe="")
+            target=quote(
+                url,
+                safe=""
+            )
         )
 
         try:
@@ -489,16 +1049,23 @@ def fetch_json(url):
             time.sleep(2)
 
     raise RuntimeError(
-        f"All fetch attempts failed for {url}: "
-        f"{last_error}"
+        f"All fetch attempts failed "
+        f"for {url}: {last_error}"
     )
 
 
+# ============================================================
+# EXTRACT SUMMARY
+# ============================================================
+
 def extract_summary(summary_json):
+
     demand = None
+
     solar = None
 
     def scan(obj):
+
         nonlocal demand, solar
 
         if isinstance(obj, dict):
@@ -506,15 +1073,19 @@ def extract_summary(summary_json):
             for k, v in obj.items():
 
                 if (
-                    k.upper() == "DEMAND_MW"
+                    k.upper()
+                    == "DEMAND_MW"
                     and demand is None
                 ):
+
                     demand = v
 
                 if (
-                    k.upper() == "RE_SOLAR_GENERATION_MW"
+                    k.upper()
+                    == "RE_SOLAR_GENERATION_MW"
                     and solar is None
                 ):
+
                     solar = v
 
                 scan(v)
@@ -522,12 +1093,17 @@ def extract_summary(summary_json):
         elif isinstance(obj, list):
 
             for item in obj:
+
                 scan(item)
 
     scan(summary_json)
 
     return demand, solar
 
+
+# ============================================================
+# EXTRACT PLANTS
+# ============================================================
 
 def extract_plants(main_json):
 
@@ -542,24 +1118,40 @@ def extract_plants(main_json):
 
     all_generators = []
 
-    if isinstance(main_json, dict):
+    if isinstance(
+        main_json,
+        dict
+    ):
 
         for v in main_json.values():
 
-            if isinstance(v, list):
+            if isinstance(
+                v,
+                list
+            ):
+
                 all_generators.extend(v)
 
-    elif isinstance(main_json, list):
+    elif isinstance(
+        main_json,
+        list
+    ):
 
         all_generators = main_json
 
     for gen in all_generators:
 
-        if not isinstance(gen, dict):
+        if not isinstance(
+            gen,
+            dict
+        ):
             continue
 
         gen_name = clean(
-            gen.get("GEN_NAME", "")
+            gen.get(
+                "GEN_NAME",
+                ""
+            )
         )
 
         actual = gen.get(
@@ -579,44 +1171,84 @@ def extract_plants(main_json):
 
         matched_key = None
 
-        # Exact match.
-        for key, mapped_name in PLANT_MAPPING.items():
+        # ----------------------------------------------------
+        # Exact match
+        # ----------------------------------------------------
 
-            if gen_name == clean(mapped_name):
+        for key, mapped_name in (
+            PLANT_MAPPING.items()
+        ):
+
+            if (
+                gen_name
+                == clean(mapped_name)
+            ):
 
                 matched_key = key
 
                 break
 
-        # Partial match.
+        # ----------------------------------------------------
+        # Partial match
+        # ----------------------------------------------------
+
         if matched_key is None:
 
-            for key, mapped_name in PLANT_MAPPING.items():
+            for key, mapped_name in (
+                PLANT_MAPPING.items()
+            ):
 
-                short = clean(mapped_name)[:13]
+                short = clean(
+                    mapped_name
+                )[:13]
 
-                if short and short in gen_name:
+                if (
+                    short
+                    and short in gen_name
+                ):
 
                     matched_key = key
 
                     break
 
+        # ----------------------------------------------------
+        # Store values
+        # ----------------------------------------------------
+
         if matched_key:
 
             try:
 
-                plant_data[matched_key] = {
-                    "DC": round(float(dc)),
-                    "SG": round(float(schedule)),
-                    "AG": round(float(actual)),
+                plant_data[
+                    matched_key
+                ] = {
+
+                    "DC": round(
+                        float(dc)
+                    ),
+
+                    "SG": round(
+                        float(schedule)
+                    ),
+
+                    "AG": round(
+                        float(actual)
+                    ),
                 }
 
-            except (TypeError, ValueError):
+            except (
+                TypeError,
+                ValueError
+            ):
 
                 pass
 
     return plant_data
 
+
+# ============================================================
+# ROUND TIME
+# ============================================================
 
 def round_to_nearest_5_minutes(dt):
 
@@ -629,12 +1261,22 @@ def round_to_nearest_5_minutes(dt):
     rounded = dt - discard
 
     if dt.minute % 5 >= 3:
-        rounded += timedelta(minutes=5)
+
+        rounded += timedelta(
+            minutes=5
+        )
 
     return rounded
 
 
-def build_row(main_json, summary_json):
+# ============================================================
+# BUILD NEW ROW
+# ============================================================
+
+def build_row(
+    main_json,
+    summary_json
+):
 
     now = round_to_nearest_5_minutes(
         datetime.now()
@@ -676,15 +1318,18 @@ def build_row(main_json, summary_json):
     return row
 
 
+# ============================================================
+# APPEND NEW ROW
+# ============================================================
+
 def append_row(row):
     """
-    Write a new row only if it contains
-    20 or fewer zero values.
-
-    Rows with more than 20 zeros are rejected.
+    Write new row only if it has 20 or fewer zero values.
     """
 
-    zero_count = count_zero_values(row)
+    zero_count = count_zero_values(
+        row
+    )
 
     if zero_count > 20:
 
@@ -715,26 +1360,43 @@ def append_row(row):
         encoding="utf-8"
     ) as f:
 
-        csv.writer(f).writerow(row)
+        csv.writer(f).writerow(
+            row
+        )
 
     return True
 
+
+# ============================================================
+# TELEGRAM
+# ============================================================
 
 def send_to_telegram(row):
 
     headers = header_row()
 
     row_dict = dict(
-        zip(headers, row)
+        zip(
+            headers,
+            row
+        )
     )
 
-    date_str = row_dict["Date"]
+    date_str = row_dict[
+        "Date"
+    ]
 
-    time_str = row_dict["Time"]
+    time_str = row_dict[
+        "Time"
+    ]
 
-    demand = row_dict["TOTAL_DEMAND"]
+    demand = row_dict[
+        "TOTAL_DEMAND"
+    ]
 
-    solar = row_dict["SOLAR_GEN"]
+    solar = row_dict[
+        "SOLAR_GEN"
+    ]
 
     name_width = max(
         len(key)
@@ -803,41 +1465,52 @@ def send_to_telegram(row):
         )
 
 
+# ============================================================
+# MAIN
+# ============================================================
+
 def main():
 
-    # -------------------------------------------------
+    # ========================================================
     # STEP 1
-    # Remove previously saved bad rows.
+    # Remove existing bad rows.
     #
-    # This runs EVERY TIME the program starts.
-    # -------------------------------------------------
+    # This happens EVERY TIME the script starts.
+    # ========================================================
 
-    print("Checking CSV for bad zero-value rows...")
+    print(
+        "Checking CSV for bad zero-value rows..."
+    )
 
     remove_zero_rows()
 
-    # -------------------------------------------------
+
+    # ========================================================
     # STEP 2
     # Prepare / maintain CSV.
-    # -------------------------------------------------
+    # ========================================================
 
     now = round_to_nearest_5_minutes(
         datetime.now()
     )
 
     # Compact CSV once daily at 00:00.
-    if now.hour == 0 and now.minute == 0:
+    if (
+        now.hour == 0
+        and now.minute == 0
+    ):
 
         compact_csv()
 
-    # Move data older than 120 days to
-    # historical.csv and ensure CSV exists.
+    # Move data older than 120 days
+    # to historical.csv.
     prepare_csv()
 
-    # -------------------------------------------------
+
+    # ========================================================
     # STEP 3
-    # Avoid duplicate/recent fetch.
-    # -------------------------------------------------
+    # Check whether latest row is recent.
+    # ========================================================
 
     if last_row_is_recent():
 
@@ -847,10 +1520,11 @@ def main():
 
         return
 
-    # -------------------------------------------------
+
+    # ========================================================
     # STEP 4
     # Fetch UPSLDC data.
-    # -------------------------------------------------
+    # ========================================================
 
     main_json = fetch_json(
         MAIN_URL
@@ -860,26 +1534,44 @@ def main():
         SUMMARY_URL
     )
 
-    # -------------------------------------------------
+
+    # ========================================================
     # STEP 5
     # Build new row.
-    # -------------------------------------------------
+    # ========================================================
 
     row = build_row(
         main_json,
         summary_json
     )
 
-    # -------------------------------------------------
+
+    # ========================================================
     # STEP 6
-    # Write only if row is valid.
+    # Check new row.
     #
     # If >20 zeros:
-    #   - Don't write to CSV
-    #   - Don't send Telegram
-    # -------------------------------------------------
+    #   - Do NOT write
+    #   - Do NOT send Telegram
+    # ========================================================
 
     if append_row(row):
+
+        print(
+            "New row written successfully."
+        )
+
+        # ====================================================
+        # STEP 7
+        # Now look for stuck values and smooth them.
+        # ====================================================
+
+        smooth_stuck_values()
+
+        # ====================================================
+        # STEP 8
+        # Send the actual newly fetched row to Telegram.
+        # ====================================================
 
         send_to_telegram(row)
 
@@ -896,5 +1588,10 @@ def main():
         )
 
 
+# ============================================================
+# START PROGRAM
+# ============================================================
+
 if __name__ == "__main__":
+
     main()
