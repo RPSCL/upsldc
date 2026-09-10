@@ -644,8 +644,8 @@
   html[data-theme="dark"] .live-toggle-btn[aria-pressed="true"]{
     background:#131316;
     box-shadow:
-      inset 3px 3px 7px rgba(0,0,0,.85),
-      inset 0 5px 7px rgba(0,0,0,.65),
+      inset 3px 3px 7px rgba(80,80,88,.6),
+      inset 0 5px 7px rgba(80,80,88,.45),
       inset -3px -2px 6px rgba(185,200,225,.16),
       inset -1px -1px 2px rgba(210,220,240,.12);
   }
@@ -1101,6 +1101,7 @@ let displayHeader = []; // formatted header cells, with Rosa Total columns inser
 let rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
 let insertAfterIdx = -1;
 let timeColIdx = 1;
+let visibleExtIdx = []; // positions to display in the "extended" array (rawHeader + 3 Rosa Total slots)
 let currentRawCSVForDate = ''; // csv text for the currently selected date, for download
 let selectedISO = '';
 // true while the selected date is "today" and should auto-advance at
@@ -1114,6 +1115,15 @@ function parseCSV(text){
 
 function normalizeHeader(h){
   return h.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+}
+
+// Plants temporarily hidden from the table and both charts (Live + Historical).
+// The fetcher keeps logging DC/SG/AG for all of them as usual — this only
+// affects what's displayed here. To bring one back, just remove its entry.
+const HIDDEN_PLANTS = ['LANCO', 'BARA', 'TANDA', 'LALITPUR', 'HARDUAGANJEX2'];
+function isHiddenColumn(rawHeaderCell){
+  const n = normalizeHeader(rawHeaderCell);
+  return HIDDEN_PLANTS.some(p => n.startsWith(p));
 }
 
 function formatHeaderLabel(h){
@@ -1209,6 +1219,24 @@ function buildHeaderPlan(){
     if(n === 'ROSA2AG') rosaColIdx.ag[1] = i;
     if(n === 'ROSA2AG') insertAfterIdx = i;
   });
+
+  visibleExtIdx = computeVisibleExtIndices();
+}
+
+// Maps raw column indices onto the "extended" array that addRosaTotals()
+// produces (rawHeader.length + 3, with the Rosa Total DC/SG/AG slots spliced
+// in right after Rosa 2 AG), then drops anything in HIDDEN_PLANTS. Used to
+// filter both the table header and every row to the same visible columns.
+function computeVisibleExtIndices(){
+  const idxs = [];
+  rawHeader.forEach((h, i)=>{
+    const ext = (insertAfterIdx === -1 || i <= insertAfterIdx) ? i : i + 3;
+    if(!isHiddenColumn(h)) idxs.push(ext);
+    if(insertAfterIdx !== -1 && i === insertAfterIdx){
+      idxs.push(ext + 1, ext + 2, ext + 3); // Rosa Total DC, SG, AG — always shown alongside Rosa 1/2
+    }
+  });
+  return idxs;
 }
 
 function addRosaTotals(row){
@@ -1336,19 +1364,23 @@ function renderForSelectedDate(){
   const fullHeader = insertAfterIdx === -1
     ? displayHeader
     : displayHeader.slice(0, insertAfterIdx + 1).concat(['Rosa Total DC','Rosa Total SG','Rosa Total AG'], displayHeader.slice(insertAfterIdx + 1));
+  const shownHeader = visibleExtIdx.map(i => fullHeader[i]);
 
-  headRow.innerHTML = '<th class="row-copy-col"></th>' + fullHeader.map((h,i)=>{
-    const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
+  headRow.innerHTML = '<th class="row-copy-col"></th>' + shownHeader.map((h,idx)=>{
+    const ext = visibleExtIdx[idx];
+    const isRosaTotal = insertAfterIdx !== -1 && ext > insertAfterIdx && ext <= insertAfterIdx + 3;
     return `<th${isRosaTotal ? ' class="rosa-total"' : ''}>${h}</th>`;
   }).join('');
 
   const rowCopyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
   bodyRows.innerHTML = sorted.map(raw=>{
     const cells = addRosaTotals(raw);
-    const rowText = cells.join('\t').replace(/"/g, '&quot;');
+    const shownCells = visibleExtIdx.map(i => cells[i]);
+    const rowText = shownCells.join('\t').replace(/"/g, '&quot;');
     const copyCell = `<td class="row-copy-col"><button type="button" class="row-copy-btn" data-row-text="${rowText}" aria-label="Copy row">${rowCopyIcon}</button></td>`;
-    const tds = cells.map((c,i)=>{
-      const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
+    const tds = shownCells.map((c,idx)=>{
+      const ext = visibleExtIdx[idx];
+      const isRosaTotal = insertAfterIdx !== -1 && ext > insertAfterIdx && ext <= insertAfterIdx + 3;
       return `<td${isRosaTotal ? ' class="rosa-total"' : ''}>${c}</td>`;
     }).join('');
     return `<tr>${copyCell}${tds}</tr>`;
@@ -1467,6 +1499,7 @@ function getAGSeriesMeta(){
   const metas = [];
   rawHeader.forEach((h,i)=>{
     if(i === timeColIdx) return;
+    if(isHiddenColumn(h)) return;
     const n = normalizeHeader(h);
     if(n.endsWith('AG')) metas.push({ idx:i, label: formatHeaderLabel(h) });
   });
