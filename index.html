@@ -1101,7 +1101,6 @@ let displayHeader = []; // formatted header cells, with Rosa Total columns inser
 let rosaColIdx = { dc:[-1,-1], sg:[-1,-1], ag:[-1,-1] };
 let insertAfterIdx = -1;
 let timeColIdx = 1;
-let visibleExtIdx = []; // positions to display in the "extended" array (rawHeader + 3 Rosa Total slots)
 let currentRawCSVForDate = ''; // csv text for the currently selected date, for download
 let selectedISO = '';
 // true while the selected date is "today" and should auto-advance at
@@ -1117,14 +1116,16 @@ function normalizeHeader(h){
   return h.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
 }
 
-// Plants temporarily hidden from the table and both charts (Live + Historical).
-// The fetcher keeps logging DC/SG/AG for all of them as usual — this only
-// affects what's displayed here. To bring one back, just remove its entry.
-const HIDDEN_PLANTS = ['LANCO', 'BARA', 'TANDA', 'LALITPUR', 'HARDUAGANJEX2'];
-function isHiddenColumn(rawHeaderCell){
+// Plant lines that start OFF on the chart — their legend chip still shows
+// (deselected), but the line itself isn't drawn (not even dimmed/grey) until
+// the person clicks it on. Turning one on sticks across date navigation and
+// LIVE mode for the rest of this visit; every page refresh resets it back off.
+const DEFAULT_OFF_PLANTS = ['LANCO', 'BARA', 'TANDA', 'LALITPUR', 'HARDUAGANJEX2'];
+function isDefaultOffPlant(rawHeaderCell){
   const n = normalizeHeader(rawHeaderCell);
-  return HIDDEN_PLANTS.some(p => n.startsWith(p));
+  return DEFAULT_OFF_PLANTS.some(p => n.startsWith(p));
 }
+let enabledOffPlants = new Set(); // labels the person has switched on this session
 
 function formatHeaderLabel(h){
   const words = h.trim().replace(/_/g,' ').split(/\s+/);
@@ -1219,24 +1220,6 @@ function buildHeaderPlan(){
     if(n === 'ROSA2AG') rosaColIdx.ag[1] = i;
     if(n === 'ROSA2AG') insertAfterIdx = i;
   });
-
-  visibleExtIdx = computeVisibleExtIndices();
-}
-
-// Maps raw column indices onto the "extended" array that addRosaTotals()
-// produces (rawHeader.length + 3, with the Rosa Total DC/SG/AG slots spliced
-// in right after Rosa 2 AG), then drops anything in HIDDEN_PLANTS. Used to
-// filter both the table header and every row to the same visible columns.
-function computeVisibleExtIndices(){
-  const idxs = [];
-  rawHeader.forEach((h, i)=>{
-    const ext = (insertAfterIdx === -1 || i <= insertAfterIdx) ? i : i + 3;
-    if(!isHiddenColumn(h)) idxs.push(ext);
-    if(insertAfterIdx !== -1 && i === insertAfterIdx){
-      idxs.push(ext + 1, ext + 2, ext + 3); // Rosa Total DC, SG, AG — always shown alongside Rosa 1/2
-    }
-  });
-  return idxs;
 }
 
 function addRosaTotals(row){
@@ -1364,23 +1347,19 @@ function renderForSelectedDate(){
   const fullHeader = insertAfterIdx === -1
     ? displayHeader
     : displayHeader.slice(0, insertAfterIdx + 1).concat(['Rosa Total DC','Rosa Total SG','Rosa Total AG'], displayHeader.slice(insertAfterIdx + 1));
-  const shownHeader = visibleExtIdx.map(i => fullHeader[i]);
 
-  headRow.innerHTML = '<th class="row-copy-col"></th>' + shownHeader.map((h,idx)=>{
-    const ext = visibleExtIdx[idx];
-    const isRosaTotal = insertAfterIdx !== -1 && ext > insertAfterIdx && ext <= insertAfterIdx + 3;
+  headRow.innerHTML = '<th class="row-copy-col"></th>' + fullHeader.map((h,i)=>{
+    const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
     return `<th${isRosaTotal ? ' class="rosa-total"' : ''}>${h}</th>`;
   }).join('');
 
   const rowCopyIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/></svg>';
   bodyRows.innerHTML = sorted.map(raw=>{
     const cells = addRosaTotals(raw);
-    const shownCells = visibleExtIdx.map(i => cells[i]);
-    const rowText = shownCells.join('\t').replace(/"/g, '&quot;');
+    const rowText = cells.join('\t').replace(/"/g, '&quot;');
     const copyCell = `<td class="row-copy-col"><button type="button" class="row-copy-btn" data-row-text="${rowText}" aria-label="Copy row">${rowCopyIcon}</button></td>`;
-    const tds = shownCells.map((c,idx)=>{
-      const ext = visibleExtIdx[idx];
-      const isRosaTotal = insertAfterIdx !== -1 && ext > insertAfterIdx && ext <= insertAfterIdx + 3;
+    const tds = cells.map((c,i)=>{
+      const isRosaTotal = insertAfterIdx !== -1 && i > insertAfterIdx && i <= insertAfterIdx + 3;
       return `<td${isRosaTotal ? ' class="rosa-total"' : ''}>${c}</td>`;
     }).join('');
     return `<tr>${copyCell}${tds}</tr>`;
@@ -1499,10 +1478,10 @@ function getAGSeriesMeta(){
   const metas = [];
   rawHeader.forEach((h,i)=>{
     if(i === timeColIdx) return;
-    if(isHiddenColumn(h)) return;
     const n = normalizeHeader(h);
-    if(n.endsWith('AG')) metas.push({ idx:i, label: formatHeaderLabel(h) });
+    if(n.endsWith('AG')) metas.push({ idx:i, label: formatHeaderLabel(h), isOff: isDefaultOffPlant(h) });
   });
+  metas.forEach((m,i)=>{ m.colorIdx = i; }); // fixed by header position, so a plant's color never changes when others are toggled
   return metas;
 }
 
@@ -1569,18 +1548,20 @@ function buildChartData(rowsForDate){
   const xValues = sorted.map(r => minutesFromHHMM(r[timeColIdx]));
   const agMetas = getAGSeriesMeta();
 
-  const agDatasets = agMetas.map((m,i)=>({
-    label: m.label,
-    data: sorted.map((r,idx) => ({ x: xValues[idx], y: parseFloat(r[m.idx]) })),
-    borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    yAxisID: 'yAG',
-    tension: .35,
-    borderWidth: 2,
-    pointRadius: 0,
-    pointHoverRadius: 5,
-    spanGaps: true,
-  }));
+  const agDatasets = agMetas
+    .filter(m => !m.isOff || enabledOffPlants.has(m.label))
+    .map(m=>({
+      label: m.label,
+      data: sorted.map((r,idx) => ({ x: xValues[idx], y: parseFloat(r[m.idx]) })),
+      borderColor: CHART_PALETTE[m.colorIdx % CHART_PALETTE.length],
+      backgroundColor: CHART_PALETTE[m.colorIdx % CHART_PALETTE.length],
+      yAxisID: 'yAG',
+      tension: .35,
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      spanGaps: true,
+    }));
 
   const datasets = agDatasets.slice();
 
@@ -1657,18 +1638,20 @@ function buildLiveWindowChartData(){
   const xValues = rowsInWindow.map(o => (o.dt - cutoff) / 60000);
   const agMetas = getAGSeriesMeta();
 
-  const agDatasets = agMetas.map((m,i)=>({
-    label: m.label,
-    data: rowsInWindow.map((o,idx) => ({ x: xValues[idx], y: parseFloat(o.row[m.idx]) })),
-    borderColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    backgroundColor: CHART_PALETTE[i % CHART_PALETTE.length],
-    yAxisID: 'yAG',
-    tension: .35,
-    borderWidth: 2,
-    pointRadius: 0,
-    pointHoverRadius: 5,
-    spanGaps: true,
-  }));
+  const agDatasets = agMetas
+    .filter(m => !m.isOff || enabledOffPlants.has(m.label))
+    .map(m=>({
+      label: m.label,
+      data: rowsInWindow.map((o,idx) => ({ x: xValues[idx], y: parseFloat(o.row[m.idx]) })),
+      borderColor: CHART_PALETTE[m.colorIdx % CHART_PALETTE.length],
+      backgroundColor: CHART_PALETTE[m.colorIdx % CHART_PALETTE.length],
+      yAxisID: 'yAG',
+      tension: .35,
+      borderWidth: 2,
+      pointRadius: 0,
+      pointHoverRadius: 5,
+      spanGaps: true,
+    }));
 
   const datasets = agDatasets.slice();
 
@@ -1763,18 +1746,51 @@ function applySelectionStyling(){
 // built-in canvas legend there, since that one carries fixed internal
 // padding we can't tighten. Mobile keeps the native canvas legend as-is,
 // this row is simply hidden by CSS below the 640px breakpoint.
+//
+// Shows a chip for every AG plant, in fixed header order, whether or not
+// it's currently plotted — the default-off ones (data-offplant="1") render
+// deselected until the person clicks them on — followed by chips for
+// whatever else is on the chart (Solar Gen, Total Demand), in order.
 function renderCustomLegend(){
   const container = document.getElementById('chartLegendRow');
   if(!container || !liveChart) return;
-  container.innerHTML = liveChart.data.datasets.map(ds=>{
+  const plottedLabels = new Set(liveChart.data.datasets.map(d=>d.label));
+  const agMetas = getAGSeriesMeta();
+
+  const agChips = agMetas.map(m=>{
+    const isPlotted = plottedLabels.has(m.label);
+    const isSelected = isPlotted && (selectedLabels.size === 0 || selectedLabels.has(m.label));
+    const color = CHART_PALETTE[m.colorIdx % CHART_PALETTE.length];
+    const safeLabel = String(m.label).replace(/"/g,'&quot;');
+    return '<button type="button" class="legend-chip' + (isSelected ? '' : ' dimmed') + '" data-label="' + safeLabel + '" data-offplant="' + (m.isOff ? '1' : '0') + '">'
+      + '<span class="legend-swatch" style="background:' + color + '"></span>'
+      + '<span>' + m.label + '</span>'
+      + '</button>';
+  }).join('');
+
+  const otherChips = liveChart.data.datasets.filter(d => !agMetas.some(m=>m.label === d.label)).map(ds=>{
     const isSelected = selectedLabels.size === 0 || selectedLabels.has(ds.label);
     const color = ds._origColor || ds.borderColor;
     const safeLabel = String(ds.label).replace(/"/g,'&quot;');
-    return '<button type="button" class="legend-chip' + (isSelected ? '' : ' dimmed') + '" data-label="' + safeLabel + '">'
+    return '<button type="button" class="legend-chip' + (isSelected ? '' : ' dimmed') + '" data-label="' + safeLabel + '" data-offplant="0">'
       + '<span class="legend-swatch" style="background:' + color + '"></span>'
       + '<span>' + ds.label + '</span>'
       + '</button>';
   }).join('');
+
+  container.innerHTML = agChips + otherChips;
+}
+
+function toggleOffPlant(label){
+  if(enabledOffPlants.has(label)) enabledOffPlants.delete(label);
+  else enabledOffPlants.add(label);
+  // rebuild whichever chart is currently active, without touching the
+  // isolate/dim selection or the table — a plain data refresh
+  if(liveModeActive){
+    renderLiveWindowChart();
+  } else {
+    initOrUpdateLiveChart(currentRowsForSelectedDate());
+  }
 }
 
 function toggleSelection(label){
@@ -2286,7 +2302,9 @@ document.getElementById('downloadOptionsOverlay').addEventListener('click', (e)=
 });
 document.getElementById('chartLegendRow').addEventListener('click', (e)=>{
   const chip = e.target.closest('.legend-chip');
-  if(chip) toggleSelection(chip.dataset.label);
+  if(!chip) return;
+  if(chip.dataset.offplant === '1') toggleOffPlant(chip.dataset.label);
+  else toggleSelection(chip.dataset.label);
 });
 document.getElementById('bodyRows').addEventListener('click', async (e)=>{
   const btn = e.target.closest('.row-copy-btn');
