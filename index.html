@@ -1521,7 +1521,10 @@ const crosshairPlugin = {
 };
 if(typeof Chart !== 'undefined') Chart.register(crosshairPlugin);
 
-const CHART_PALETTE = ['#ff6b6b','#4dabf7','#51cf66','#f59f00','#cc5de8','#20c997','#ff922b','#5c7cfa','#ff8fa3','#66d9e8'];
+// Evenly spread around the hue wheel and kept clear of the yellow/amber band
+// (Solar Gen's yellow and Total Demand's accent color both live there), so no
+// two plant lines read as "the same warmish color" at a glance.
+const CHART_PALETTE = ['#db434d','#43a0db','#43db55','#a743db','#43dbb6','#db43ae','#4643db','#91db43'];
 const SOLAR_COLOR = '#ffd43b';
 
 // "HH:MM" -> minutes since midnight, and back. Using real numeric minutes as
@@ -1886,16 +1889,26 @@ function buildTaggedDatasets(rowsForDate){
   return { labels, datasets };
 }
 
+// Matches by dataset LABEL, not array position — the set of AG plant lines
+// can now grow/shrink between renders (a plant gets toggled on/off), so the
+// old index-based match would silently hand a newly-added series' data to
+// whatever dataset object happened to already be sitting at that index
+// (wrong color, wrong axis, wrong style — e.g. landing on Total Demand's
+// dashed right-axis look). Matching by label keeps each series' own object
+// (and its color/axis) across renders, still mutating .data in place for the
+// smooth update Chart.js expects, while genuinely new/removed series are
+// added/dropped correctly.
 function mergeDataIntoChart(chart, labels, datasets){
   chart.data.labels = labels;
-  datasets.forEach((ds,i)=>{
-    if(chart.data.datasets[i]){
-      chart.data.datasets[i].data = ds.data;
-    } else {
-      chart.data.datasets[i] = ds;
+  const existingByLabel = new Map(chart.data.datasets.map(ds => [ds.label, ds]));
+  chart.data.datasets = datasets.map(ds=>{
+    const existing = existingByLabel.get(ds.label);
+    if(existing){
+      existing.data = ds.data;
+      return existing;
     }
+    return ds; // brand-new series — caller has already run tagOriginalStyle on it
   });
-  chart.data.datasets.length = datasets.length;
 }
 
 // Applies a freshly-built {labels, datasets} pair to whichever chart
