@@ -76,17 +76,25 @@ PROXY_URL_TEMPLATES = [
 
 PLANT_SEQUENCE = [
     "MEJA",
+    "LANCO",
+    "BARA",
+    "TANDA",
+    "LALITPUR",
+    "Harduaganj Ex2",
     "ROSA 1",
-    "ROSA 2",
-    "LALITPUR"
+    "ROSA 2"
 ]
 
 
 PLANT_MAPPING = {
     "MEJA": "MejaUrjaNigamPvtLtd",
+    "LANCO": "MEILANPARAENERGYLIMITED",
+    "BARA": "PRAYAGRAJSUPERCRITICALTPPBARA",
+    "TANDA": "THDCIndiaLimitedKhurja",
+    "LALITPUR": "LALITPURPOWERGENERATIONCOMPANYLIMITED",
+    "Harduaganj Ex2": "Harduaganj1X660MWUPRVUNL",
     "ROSA 1": "ROSA-I",
     "ROSA 2": "ROSA-II",
-    "LALITPUR": "LALITPURPOWERGENERATIONCOMPANYLIMITED",
 }
 
 
