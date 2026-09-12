@@ -1,4 +1,3 @@
-````python
 """
 UPSLDC LIVE DATA COLLECTOR
 
@@ -1714,4 +1713,4 @@ def main():
 if __name__ == "__main__":
 
     main()
-````
+
