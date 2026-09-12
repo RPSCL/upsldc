@@ -31,6 +31,7 @@ DATA PROTECTION:
 import os
 import csv
 import time
+import shutil
 from datetime import datetime, timedelta
 from urllib.parse import quote
 
@@ -58,6 +59,49 @@ HISTORICAL_CSV = os.path.join(
     BASE_DIR,
     "historical.csv"
 )
+
+
+# ============================================================
+# BACKUP CONFIGURATION
+# ============================================================
+
+BACKUP_FOLDERS = [
+    r"C:\Users\rosa.ccr\Music",
+    r"C:\Users\rosa.ccr\Videos",
+]
+
+def backup_hourly_csv():
+    """
+    Copy the ENTIRE current upsldc_hourly_data.csv to both
+    backup folders, overwriting the previous backup each time.
+    """
+    if not os.path.exists(OUTPUT_CSV):
+        print("Backup skipped: upsldc_hourly_data.csv does not exist.")
+        return
+
+    for folder in BACKUP_FOLDERS:
+        try:
+            os.makedirs(folder, exist_ok=True)
+
+            destination = os.path.join(
+                folder,
+                "upsldc_hourly_data.csv"
+            )
+
+            shutil.copy2(
+                OUTPUT_CSV,
+                destination
+            )
+
+            print(
+                f"Backup successful: {destination}"
+            )
+
+        except Exception as e:
+            print(
+                f"Backup failed for {folder}: {e}"
+            )
+
 
 
 # ============================================================
@@ -1631,6 +1675,9 @@ def main():
             "No new fetch required."
         )
 
+        # Still refresh both backups every 5 minutes.
+        backup_hourly_csv()
+
         return
 
 
@@ -1704,6 +1751,14 @@ def main():
             "Data was NOT written "
             "and Telegram was NOT sent."
         )
+
+    # ========================================================
+    # STEP 9
+    # Backup the ENTIRE current CSV to both folders.
+    # The previous backup is overwritten.
+    # ========================================================
+
+    backup_hourly_csv()
 
 
 # ============================================================
