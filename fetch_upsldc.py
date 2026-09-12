@@ -1,4 +1,7 @@
+````python
 """
+UPSLDC LIVE DATA COLLECTOR
+
 Fetches live UPSLDC data and appends one row to upsldc_hourly_data.csv.
 Runs every 5 minutes.
 
@@ -8,17 +11,23 @@ At 00:00 every day:
 - Older data is reduced to hourly frequency.
 - Data older than 120 days is moved to historical.csv.
 
-Additional data protection:
+DATA PROTECTION:
 1. Rows having more than 20 zero values are removed on startup.
 2. New rows having more than 20 zero values are rejected.
-3. If a numeric value remains exactly the same for more than 2
-   consecutive rows, it is considered potentially stuck.
-4. Once a different value appears after the stuck section, the
-   stuck values are linearly interpolated between the value before
-   and the value after the stuck section.
-5. If the stuck section is at the end of the CSV, it is not changed
+3. Zero values are NEVER modified by the smoothing routine.
+4. SOLAR_GEN is NEVER smoothed.
+5. If a NON-ZERO numeric value remains exactly the same for
+   3 or more consecutive rows, it is considered potentially stuck.
+6. A stuck section is smoothed only when both surrounding values
+   are valid and NON-ZERO.
+7. If the stuck section is at the end of the CSV, it is not changed
    until a recovery/different value becomes available.
+8. Solar off-peak hours are forced to exactly 0 MW.
 """
+
+# ============================================================
+# IMPORTS
+# ============================================================
 
 import os
 import csv
@@ -50,6 +59,16 @@ HISTORICAL_CSV = os.path.join(
     BASE_DIR,
     "historical.csv"
 )
+
+
+# ============================================================
+# SOLAR OFF-PEAK CONFIGURATION
+# ============================================================
+
+# Solar will be forced to 0 MW from 18:00 until 05:59.
+
+SOLAR_OFF_PEAK_START = 18
+SOLAR_OFF_PEAK_END = 6
 
 
 # ============================================================
@@ -213,9 +232,7 @@ def remove_zero_rows():
             ):
                 continue
 
-            zero_count = count_zero_values(
-                row
-            )
+            zero_count = count_zero_values(row)
 
             if zero_count > 20:
 
@@ -278,26 +295,20 @@ def remove_zero_rows():
 
 def smooth_stuck_values():
     """
-    Detects values that remain exactly the same for
-    MORE THAN 2 consecutive rows.
+    Smooth only genuine NON-ZERO stuck values.
 
-    Example:
+    IMPORTANT:
 
-        07:30   1325
-        07:35   1325
-        07:40   1325
-        07:45   1325
-        07:50   1100
-
-    The 4 repeated values are considered stuck.
-
-    They are replaced by linearly interpolated values
-    between 1325 and 1100.
-
-    The Date and Time columns are never modified.
-
-    A stuck section at the END of the CSV is left alone
-    until a different/recovery value becomes available.
+    1. ZERO values are NEVER modified.
+    2. SOLAR_GEN is NEVER modified by this function.
+    3. A repeated zero section is left untouched.
+    4. If the value before the repeated section is zero,
+       the section is left untouched.
+    5. If the value after the repeated section is zero,
+       the section is left untouched.
+    6. Only non-zero values repeated for 3 or more rows
+       are interpolated.
+    7. A stuck section at the end is left unchanged.
     """
 
     if not os.path.exists(OUTPUT_CSV):
@@ -338,21 +349,38 @@ def smooth_stuck_values():
         changed_count = 0
 
         # ----------------------------------------------------
-        # Process each numeric column independently.
+        # Process numeric columns.
         #
-        # Columns:
         # 0 = Date
         # 1 = Time
-        # 2 onward = numeric data
+        # 2 = TOTAL_DEMAND
+        # 3 = SOLAR_GEN
+        # 4 onward = plant data
+        #
+        # SOLAR_GEN IS EXCLUDED.
         # ----------------------------------------------------
 
-        for col in range(2, len(expected_header)):
+        for col in range(
+            2,
+            len(expected_header)
+        ):
+
+            # ------------------------------------------------
+            # NEVER SMOOTH SOLAR.
+            # ------------------------------------------------
+
+            if expected_header[col] == "SOLAR_GEN":
+
+                continue
 
             i = 1
 
             while i < len(data_rows) - 1:
 
-                # Try to read current value.
+                # ------------------------------------------------
+                # Read current value.
+                # ------------------------------------------------
+
                 try:
 
                     current_value = float(
@@ -369,15 +397,24 @@ def smooth_stuck_values():
                     continue
 
                 # ------------------------------------------------
-                # Find how many consecutive rows have exactly
-                # the same value.
+                # ZERO VALUES ARE NEVER TOUCHED.
+                # ------------------------------------------------
+
+                if current_value == 0:
+
+                    i += 1
+                    continue
+
+                # ------------------------------------------------
+                # Find consecutive identical values.
                 # ------------------------------------------------
 
                 run_start = i
                 run_end = i
 
                 while (
-                    run_end + 1 < len(data_rows)
+                    run_end + 1
+                    < len(data_rows)
                 ):
 
                     try:
@@ -405,17 +442,21 @@ def smooth_stuck_values():
                         break
 
                 run_length = (
-                    run_end - run_start + 1
+                    run_end
+                    - run_start
+                    + 1
                 )
 
                 # ------------------------------------------------
-                # Only act if MORE THAN 2 rows have same value.
-                # Therefore minimum run = 3 rows.
+                # Only act if 3+ identical values.
                 # ------------------------------------------------
 
                 if run_length >= 3:
 
-                    # Need a valid value BEFORE the stuck section.
+                    # ------------------------------------------------
+                    # Need valid value BEFORE the stuck section.
+                    # ------------------------------------------------
+
                     if run_start <= 0:
 
                         i = run_end + 1
@@ -439,13 +480,22 @@ def smooth_stuck_values():
                         continue
 
                     # ------------------------------------------------
-                    # Need a recovery value AFTER the stuck section.
-                    #
-                    # If run_end is the final row, the website may
-                    # still be stuck. Do NOT alter it yet.
+                    # NEVER smooth if BEFORE value is zero.
                     # ------------------------------------------------
 
-                    if run_end + 1 >= len(data_rows):
+                    if before_value == 0:
+
+                        i = run_end + 1
+                        continue
+
+                    # ------------------------------------------------
+                    # Need valid value AFTER the stuck section.
+                    # ------------------------------------------------
+
+                    if (
+                        run_end + 1
+                        >= len(data_rows)
+                    ):
 
                         i = run_end + 1
                         continue
@@ -468,8 +518,17 @@ def smooth_stuck_values():
                         continue
 
                     # ------------------------------------------------
-                    # If before and after are also the same,
-                    # this is not a useful stuck transition.
+                    # NEVER smooth if AFTER value is zero.
+                    # ------------------------------------------------
+
+                    if after_value == 0:
+
+                        i = run_end + 1
+                        continue
+
+                    # ------------------------------------------------
+                    # If all three are equal, there is no useful
+                    # transition.
                     # ------------------------------------------------
 
                     if (
@@ -482,16 +541,7 @@ def smooth_stuck_values():
                         continue
 
                     # ------------------------------------------------
-                    # Interpolate the stuck values.
-                    #
-                    # Example:
-                    #
-                    # Before = 1325
-                    # Stuck rows = 4
-                    # After = 1100
-                    #
-                    # The 4 values are distributed evenly between
-                    # 1325 and 1100.
+                    # Interpolate the repeated values.
                     # ------------------------------------------------
 
                     total_steps = (
@@ -513,10 +563,18 @@ def smooth_stuck_values():
                             / total_steps
                         )
 
-                        # Keep whole-number MW values.
                         interpolated = round(
                             interpolated
                         )
+
+                        # ------------------------------------------------
+                        # Extra safety:
+                        # smoothing can NEVER create zero.
+                        # ------------------------------------------------
+
+                        if interpolated == 0:
+
+                            interpolated = 1
 
                         data_rows[
                             run_start + k - 1
@@ -542,7 +600,7 @@ def smooth_stuck_values():
                 i = run_end + 1
 
         # ----------------------------------------------------
-        # Write modified CSV back.
+        # Write modified CSV.
         # ----------------------------------------------------
 
         if changed_count > 0:
@@ -573,7 +631,7 @@ def smooth_stuck_values():
 
             print(
                 "Data smoothing: "
-                "no stuck values requiring correction"
+                "no non-zero stuck values requiring correction"
             )
 
     except Exception as e:
@@ -581,6 +639,45 @@ def smooth_stuck_values():
         print(
             f"Could not smooth stuck values: {e}"
         )
+
+
+# ============================================================
+# FORCE SOLAR OFF-PEAK TO ZERO
+# ============================================================
+
+def force_solar_off_peak_zero(row):
+    """
+    Set SOLAR_GEN to exactly 0 MW during solar off-peak hours.
+
+    Default:
+        18:00 through 05:59 = 0 MW
+        06:00 through 17:59 = actual fetched value
+
+    SOLAR_GEN is column 3.
+    """
+
+    try:
+
+        hour = int(
+            row[1].split(":")[0]
+        )
+
+        if (
+            hour >= SOLAR_OFF_PEAK_START
+            or hour < SOLAR_OFF_PEAK_END
+        ):
+
+            row[3] = 0
+
+    except (
+        ValueError,
+        TypeError,
+        IndexError
+    ):
+
+        pass
+
+    return row
 
 
 # ============================================================
@@ -733,6 +830,7 @@ def compact_csv():
                 for cell in row
             )
         ):
+
             continue
 
         try:
@@ -882,6 +980,7 @@ def prepare_csv():
                 for cell in row
             )
         ):
+
             continue
 
         try:
@@ -1145,6 +1244,7 @@ def extract_plants(main_json):
             gen,
             dict
         ):
+
             continue
 
         gen_name = clean(
@@ -1233,7 +1333,7 @@ def extract_plants(main_json):
 
                     "AG": round(
                         float(actual)
-                    ),
+                    )
                 }
 
             except (
@@ -1314,6 +1414,14 @@ def build_row(
             p["SG"],
             p["AG"]
         ]
+
+    # --------------------------------------------------------
+    # Force solar off-peak hours to exactly 0 MW.
+    # --------------------------------------------------------
+
+    row = force_solar_off_peak_zero(
+        row
+    )
 
     return row
 
@@ -1494,7 +1602,10 @@ def main():
         datetime.now()
     )
 
+    # --------------------------------------------------------
     # Compact CSV once daily at 00:00.
+    # --------------------------------------------------------
+
     if (
         now.hour == 0
         and now.minute == 0
@@ -1502,8 +1613,11 @@ def main():
 
         compact_csv()
 
+    # --------------------------------------------------------
     # Move data older than 120 days
     # to historical.csv.
+    # --------------------------------------------------------
+
     prepare_csv()
 
 
@@ -1561,12 +1675,17 @@ def main():
             "New row written successfully."
         )
 
+
         # ====================================================
         # STEP 7
-        # Now look for stuck values and smooth them.
+        # Look for stuck values and smooth them.
+        #
+        # ZERO values are protected.
+        # SOLAR_GEN is completely excluded.
         # ====================================================
 
         smooth_stuck_values()
+
 
         # ====================================================
         # STEP 8
@@ -1595,3 +1714,4 @@ def main():
 if __name__ == "__main__":
 
     main()
+````
